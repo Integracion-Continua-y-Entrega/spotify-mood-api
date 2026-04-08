@@ -33,7 +33,7 @@ services:
     build:
       context: ./src/api
     command:
-      python ./src/api/seed.py
+      python ./app/src/api/seed.py
     depends_on:
       - mongodb
     volumes:
