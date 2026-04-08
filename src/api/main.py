@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from pymongo import AsyncMongoClient
-from src.api.models.users_collection import UserCollection
+from models.users_collection import UserCollection
 import os 
 
 app = FastAPI()

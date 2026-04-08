@@ -10,7 +10,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - .:/code/app/api
+      - ./src/api:/code/app/src/api
       - data:/data
     depends_on:
       - mongodb
@@ -37,7 +37,7 @@ services:
     depends_on:
       - mongodb
     volumes:
-      - .:/code
+      - ./src/api:/code/app/src/api
     env_file:
       .env.example
     networks:
