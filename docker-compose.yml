@@ -1,7 +1,7 @@
 services:
   web:
     build: 
-      context: ./api
+      context: ./src/api
       dockerfile: Dockerfile
       args:
         requirements_file: requirements.txt
@@ -14,14 +14,14 @@ services:
       - data:/data
     depends_on:
       - mongodb
-    env_file: .env
+    env_file: .env.example
     restart: always
     networks:
       - app-network
   
   mongodb:
     image: mongo:latest
-    env_file: .env
+    env_file: .env.example
     ports:
       - '27017:27017'
     volumes:
@@ -31,15 +31,15 @@ services:
 
   seeder:
     build:
-      context: ./api
+      context: ./src/api
     command:
-      python ./api/seed.py
+      python ./src/api/seed.py
     depends_on:
       - mongodb
     volumes:
       - .:/code
     env_file:
-      .env
+      .env.example
     networks:
       - app-network
     restart: "no"
