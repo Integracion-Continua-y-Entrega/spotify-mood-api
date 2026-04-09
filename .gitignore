@@ -1,23 +1,59 @@
-api/.venv/
+# Python
+src/api/.venv/
 **/__pycache__/
 **/*.pyc
-web/node_modules/
-web/dist/
-.env
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+build/
+dist/
+*.whl
 pip-log.txt
 pip-delete-this-directory.txt
-htmlcov/
-.tox/
-.nox/
+
+# Test / Coverage
+src/api/tests/.pytest_cache/
 .coverage
 .coverage.*
-.cache
-nosetests.xml
 coverage.xml
 *.cover
 *.py.cover
+htmlcov/
+.tox/
+.nox/
 .hypothesis/
-.pytest_cache/
+.cache
+nosetests.xml
 cover/
+
+# Translations
 *.mo
 *.pot
+
+# Docker
+docker-compose.override.yml
+
+# MongoDB volumes
+mongo_data/
+data/
+
+# Environment / Secrets
+.env
+.env.*
+!src/api/.env.example
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
