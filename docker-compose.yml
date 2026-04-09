@@ -1,0 +1,51 @@
+services:
+  web:
+    build: 
+      context: ./src/api
+      dockerfile: Dockerfile
+    stdin_open: true
+    tty: true
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src/api:/code/app/src/api
+      - data:/data
+    depends_on:
+      - mongodb
+    env_file: .env.example
+    restart: always
+    networks:
+      - app-network
+  
+  mongodb:
+    image: mongo:latest
+    env_file: .env.example
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - app-network
+
+  seeder:
+    build:
+      context: ./src/api
+    command:
+      python ./app/src/api/seed.py
+    depends_on:
+      - mongodb
+    volumes:
+      - ./src/api:/code/app/src/api
+    env_file:
+      .env.example
+    networks:
+      - app-network
+    restart: "no"
+
+networks:
+  app-network:
+    driver: bridge
+  
+volumes:
+  mongo_data:
+  data:
