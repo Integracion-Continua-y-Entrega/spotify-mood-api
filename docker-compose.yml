@@ -1,8 +1,8 @@
 services:
   web:
     build: 
-      context: .
-      dockerfile: src/api/Dockerfile
+      context: ./src/api
+      dockerfile: Dockerfile
     stdin_open: true
     tty: true
     ports:
@@ -27,10 +27,9 @@ services:
     networks:
       - app-network
 
-  seeder1:
+  seeder:
     build:
-      context: .
-      dockerfile: src/api/Dockerfile
+      context: ./src/api
     command:
       python ./app/src/api/seed.py
     depends_on:
