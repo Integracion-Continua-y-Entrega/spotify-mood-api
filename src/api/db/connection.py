@@ -1,7 +1,8 @@
 import os
-from pymongo import MongoClient
+from pymongo import AsyncMongoClient
 from pymongo.errors import ConnectionFailure
 
+# TODO: 1. Reemplazar MongoClient por AsyncMongoClient
 def get_database():
     """
     Retorna la instancia de la base de datos.
@@ -13,7 +14,7 @@ def get_database():
     if not mongo_uri:
         raise EnvironmentError("MONGO_URI no está definida en las variables de entorno.")
 
-    client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
+    client = AsyncMongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
 
     try:
         client.admin.command("ping")

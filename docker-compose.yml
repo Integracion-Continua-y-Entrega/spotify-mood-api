@@ -12,7 +12,7 @@ services:
       - data:/data
     depends_on:
       - mongodb
-    env_file: .env.example
+    env_file: .env
     restart: always
     networks:
       - app-network
