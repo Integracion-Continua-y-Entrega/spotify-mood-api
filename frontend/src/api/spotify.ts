@@ -27,7 +27,8 @@ export async function redirectToAuthCodeFlow(
     throw new Error(`Error criptográfico en PKCE: ${error}`);
   }
 
-  sessionStorage.setItem("spotify_pkce_verifier", verifier);
+  localStorage.setItem("spotify_pkce_verifier", verifier);
+  console.log("Verifier guardado en:", window.location.origin);
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -45,7 +46,8 @@ export async function getAccessToken(
   clientId: string,
   code: string,
 ): Promise<TokenResponse> {
-  const verifier = sessionStorage.getItem("spotify_pkce_verifier");
+  const verifier = localStorage.getItem("spotify_pkce_verifier");
+  console.log("Intentando recuperar verifier de localStorage:", verifier);
 
   if (!verifier) {
     throw new Error(
@@ -67,14 +69,16 @@ export async function getAccessToken(
     body: params,
   });
 
-  sessionStorage.removeItem("spotify_pkce_verifier");
+  const data = await response.json();
 
   if (!response.ok) {
-    const errorData = await response.json();
     throw new Error(
-      `Spotify Auth Error [${response.status}]: ${errorData.error_description || errorData.error}`,
+      `Spotify API Error: ${data.error_description || data.error}`,
     );
   }
 
-  return response.json() as Promise<TokenResponse>;
+  console.log("Token obtenido con éxito, limpiando verifier...");
+  localStorage.removeItem("spotify_pkce_verifier");
+
+  return data;
 }
