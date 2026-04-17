@@ -36,12 +36,13 @@ class UserModel(BaseModel):
     username: str
     email: str
     password_hash: str
-    created_at: datetime
-    updated_at: datetime
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
     preferences: Optional[Preferences] = None
-    is_active: bool
+    is_active: bool = True
 
     model_config = ConfigDict(
+        validate_assignment=True,
         populate_by_name=True,
         arbitrary_types_allowed=True,
         json_schema_extra={
