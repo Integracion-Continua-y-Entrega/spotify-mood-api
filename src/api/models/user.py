@@ -44,8 +44,10 @@ class UserModel(BaseModel):
     last_login: datetime
 
     preferences: Optional[Preferences] = None
+    is_active: bool = True
 
     model_config = ConfigDict(
+        validate_assignment=True,
         populate_by_name=True,
         arbitrary_types_allowed=True,
         json_schema_extra={
