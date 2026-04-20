@@ -255,11 +255,7 @@ users (1) ──────────────── (N) recommendations
 
 ---
 
-## 4. Variables de Entorno y Gestión de Secretos
-
-> ⚠️ **Observación del maestro integrada:** Las credenciales de MongoDB **nunca** deben hardcodearse. Se gestionan como secretos en GitHub Actions y variables de entorno en Docker.
-
-### Archivo `.env` (local, excluido del repositorio en `.gitignore`)
+### 4. Archivo `.env` (local, excluido del repositorio en `.gitignore`)
 
 ```env
 MONGO_HOST=localhost
@@ -271,7 +267,7 @@ MONGO_AUTH_SOURCE=admin
 MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@${MONGO_HOST}:${MONGO_PORT}/${MONGO_DB}?authSource=${MONGO_AUTH_SOURCE}
 ```
 
-### GitHub Actions Secrets (Settings > Secrets and variables > Actions)
+### 5. GitHub Actions Secrets (Settings > Secrets and variables > Actions)
 
 ```
 MONGO_URI          → URI completa de conexión
@@ -279,7 +275,7 @@ MONGO_USERNAME     → Usuario de base de datos
 MONGO_PASSWORD     → Contraseña de base de datos
 ```
 
-### Uso en el pipeline CI/CD (`.github/workflows/ci.yml`)
+### 5.1  Uso en el pipeline CI/CD (`.github/workflows/ci.yml`)
 
 ```yaml
 env:
@@ -288,147 +284,7 @@ env:
   MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
 ```
 
----
-
-## 5. Configuración Docker (alineado con observación del maestro)
-
-> El maestro indica que Docker y Docker Hub deben mencionarse explícitamente e integrarse desde el hito inicial (29/03/2026).
-
-### `docker-compose.yml` para desarrollo local
-
-```yaml
-version: "3.9"
-
-services:
-  mongodb:
-    image: mongo:7.0
-    container_name: ice_mongodb
-    restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
-      MONGO_INITDB_DATABASE: ${MONGO_DB}
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/init.js:ro
-
-  api:
-    build: .
-    container_name: ice_api
-    restart: unless-stopped
-    depends_on:
-      - mongodb
-    environment:
-      MONGO_URI: ${MONGO_URI}
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env
-
-volumes:
-  mongo_data:
-```
-
-### `Dockerfile` base para la API (Python)
-
-```dockerfile
-FROM python:3.12-slim
-
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-EXPOSE 8000
-CMD ["python", "main.py"]
-```
-
----
-
-## 6. Script de Inicialización (`scripts/mongo-init.js`)
-
-Se ejecuta automáticamente cuando el contenedor de MongoDB arranca por primera vez.
-
-```javascript
-// Crear usuario de aplicación con permisos limitados
-db = db.getSiblingDB("music_recommendations");
-
-db.createUser({
-  user: "api_user",
-  pwd: process.env.MONGO_PASSWORD || "changeme",
-  roles: [{ role: "readWrite", db: "music_recommendations" }]
-});
-
-// Crear colecciones con validación de esquema
-db.createCollection("users", {
-  validator: {
-    $jsonSchema: {
-      bsonType: "object",
-      required: ["username", "email", "password_hash", "created_at"],
-      properties: {
-        username: { bsonType: "string" },
-        email:    { bsonType: "string" },
-        password_hash: { bsonType: "string" },
-        created_at:    { bsonType: "date" },
-        is_active:     { bsonType: "bool" }
-      }
-    }
-  }
-});
-
-db.createCollection("tracks", {
-  validator: {
-    $jsonSchema: {
-      bsonType: "object",
-      required: ["title", "artist", "acoustic_features"],
-      properties: {
-        title:  { bsonType: "string" },
-        artist: { bsonType: "string" },
-        acoustic_features: {
-          bsonType: "object",
-          required: ["energy", "danceability", "valence", "tempo"],
-          properties: {
-            energy:       { bsonType: "double", minimum: 0, maximum: 1 },
-            danceability: { bsonType: "double", minimum: 0, maximum: 1 },
-            valence:      { bsonType: "double", minimum: 0, maximum: 1 },
-            tempo:        { bsonType: "double", minimum: 0 }
-          }
-        }
-      }
-    }
-  }
-});
-
-db.createCollection("recommendations");
-db.createCollection("playlists");
-
-// Crear índices
-db.users.createIndex({ email: 1 }, { unique: true });
-db.users.createIndex({ username: 1 }, { unique: true });
-db.tracks.createIndex({ "acoustic_features.energy": 1 });
-db.tracks.createIndex({ "acoustic_features.danceability": 1 });
-db.tracks.createIndex({ "acoustic_features.valence": 1 });
-db.tracks.createIndex({ "acoustic_features.tempo": 1 });
-db.tracks.createIndex({ genre: 1 });
-db.tracks.createIndex({ artist: 1, title: 1 });
-db.tracks.createIndex({
-  "acoustic_features.energy": 1,
-  "acoustic_features.valence": 1,
-  "acoustic_features.danceability": 1
-});
-db.recommendations.createIndex({ user_id: 1, generated_at: -1 });
-db.playlists.createIndex({ user_id: 1, created_at: -1 });
-
-print("✅ Base de datos inicializada correctamente.");
-```
-
----
-
-## 7. Conexión desde Python (`db/connection.py`)
+### 6. Conexión desde Python (`db/connection.py`)
 
 ```python
 import os
@@ -450,7 +306,7 @@ def get_database():
 
     try:
         client.admin.command("ping")
-        print("✅ Conexión a MongoDB exitosa.")
+        print("Conexión a MongoDB exitosa.")
     except ConnectionFailure as e:
         raise ConnectionFailure(f"No se pudo conectar a MongoDB: {e}")
 
@@ -469,7 +325,7 @@ def get_collections(db):
 
 ---
 
-## 8. Consideraciones para Hitos Futuros
+## 7. Consideraciones para Hitos Futuros
 
 | Hito | Fecha | Impacto en el esquema |
 |------|-------|-----------------------|
@@ -482,4 +338,4 @@ def get_collections(db):
 
 ---
 
-*Documento generado para el Release R1 — Equipo I.C.E*
+*Documento para el Release R1 — Equipo I.C.E*
