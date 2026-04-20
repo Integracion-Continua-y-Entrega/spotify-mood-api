@@ -35,7 +35,7 @@ Este enfoque permite desacoplar la lógica de negocio y facilitar la escalabilid
 
 ### 🔄 Flujo general del sistema
 
-El sistema sigue una arquitectura basada en servicios donde el cliente interactúa con una API backend desarrollada en FastAPI. Esta API gestiona la autenticación con Spotify mediante **OAuth 2.0 (Authorization Code Flow)**, procesa la lógica de recomendación musical y almacena información relevante en una base de datos MongoDB.
+El sistema sigue una arquitectura basada en servicios donde el cliente interactúa con una API backend desarrollada en FastAPI. Esta API gestiona la autenticación con Spotify mediante **OAuth 2.0 (Authorization Code with PKCE Flow)**, procesa la lógica de recomendación musical y almacena información relevante en una base de datos MongoDB.
 
 La API también se comunica con la Spotify Web API para obtener datos musicales en tiempo real.
 
@@ -115,14 +115,33 @@ uvicorn main:app --reload
 La API estará disponible en `http://localhost:8000`.  
 La documentación interactiva (Swagger UI) estará en `http://localhost:8000/docs`.
 
+## 🐳 Docker
+
+Asegúrate de tener configurado tu archivo `.env` correctamente, de lo contrario los servicios no iniciarán correctamente.
+
+Luego ejecuta:
+
+```bash
+docker-compose up --build
+```
+
+> La API estará disponible en `http://localhost:8000`.  
+
 ## 🌐 Endpoints de la API
 
-| Método | Ruta             | Parámetros          | Descripción                                             | Respuesta (200 OK)              |
-| ------ | ---------------- | ------------------- | ------------------------------------------------------- | ------------------------------- |
-| GET    | /auth/login      | Ninguno             | Inicia el flujo de autenticación con Spotify.           | Redirección a Spotify Auth      |
-| GET    | /recommendations | `mood` (string)     | Obtiene canciones basadas en el estado de ánimo.        | Lista de tracks en formato JSON |
-| POST   | /playlists       | `user_id`, `tracks` | Crea una playlist en Spotify y la guarda en el sistema. | Detalles de la playlist creada  |
-| GET    | /history         | `user_id`           | Recupera el historial de recomendaciones del usuario.   | Historial desde MongoDB (JSON)  |
+### Endpoints de la API
+
+| Método | Ruta | Parámetros | Descripción |
+| :--- | :--- | :--- | :--- |
+| **GET** | `/users/me` | Ninguno | Obtiene el perfil del usuario autenticado desde Spotify. |
+| **PATCH** | `/users/me` | `preferred_moods` | Actualiza información del perfil del usuario. |
+| **GET** | `/callback` | `code`, `state` | Endpoint para procesar el código de Spotify e intercambiarlo por tokens. |
+| **GET** | `/tracks` | `limit` | Busca pistas de audio en el catálogo local. |
+| **GET** | `/users/me/playlists` | Ninguno | Recupera las playlists creadas o seguidas por el usuario. |
+| **GET** | `/users/me/recommendations` | `limit`, `genres`, `mood` | Obtiene sugerencias musicales basadas en los gustos del usuario. |
+| **POST** | `/users/me/playlists` | `name`, `description` | Crea una nueva playlist en la cuenta de Spotify del usuario. |
+| **POST** | `/users/me/recommendations` | `mood`, `track_ids` | Guarda una selección de recomendaciones en la base de datos. |
+| **DELETE** | `/users/me/recommendations` | `recommendation_id` | Elimina un registro específico del historial de recomendaciones. |
 
 ### 🎭 Valores válidos para `mood`
 
@@ -217,5 +236,5 @@ SPOTIFY_CLIENT_ID=your_client_id_here
 SPOTIFY_CLIENT_SECRET=your_client_secret_here
 SPOTIFY_REDIRECT_URI=http://localhost:8000/callback
 
-MONGO_DETAILS=mongodb://localhost:27017
+MONGO_URI=mongodb://localhost:27017
 ```
