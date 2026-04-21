@@ -40,8 +40,6 @@ data/
 
 # Environment / Secrets
 .env
-.env.*
-!src/api/.env.example
 
 # Logs
 *.log
@@ -82,3 +80,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+.venv
+env

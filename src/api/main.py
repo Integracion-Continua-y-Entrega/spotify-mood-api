@@ -1,72 +1,146 @@
-from fastapi import FastAPI
-from models.users_collection import UserCollection
-from models.tracks_collection import TrackCollection
-from models.recommendations_collection import RecommendationCollection
-from models.playlists_collection import PlaylistCollection
-from db.connection import get_database, get_collections
+import os
+import base64
+import httpx
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 
-app = FastAPI()
-db = get_database()
+from fastapi import FastAPI, HTTPException, Request
+from pydantic import BaseModel
+from dotenv import load_dotenv
+from jose import jwt
+from cryptography.fernet import Fernet
+from fastapi.middleware.cors import CORSMiddleware
+from db.connection import get_database, MongoDB
 
-@app.get("/api/v1/health")
-async def get_api_health():
-    return {"status": "ok"}
+# 1. Cargar variables de entorno
+load_dotenv()
 
-@app.get(
-        "/api/v1/users",
-        response_description="List all users",
-        response_model=UserCollection,
-        response_model_by_alias=False
+
+def _require_env(key: str) -> str:
+    """Valida que las variables de entorno existan al arrancar."""
+    value = os.environ.get(key)
+    if not value:
+        raise RuntimeError(f"❌ Error Crítico: Variable de entorno requerida no encontrada: {key}")
+    return value
+
+# Configuración validada (Fail-fast)
+SECRET_KEY            = _require_env("JWT_SECRET_KEY")
+SPOTIFY_CLIENT_ID     = _require_env("SPOTIFY_CLIENT_ID")
+SPOTIFY_CLIENT_SECRET = _require_env("SPOTIFY_CLIENT_SECRET")
+SPOTIFY_REDIRECT_URI  = _require_env("SPOTIFY_REDIRECT_URI")
+ENCRYPTION_KEY        = _require_env("TOKEN_ENCRYPTION_KEY")
+
+fernet = Fernet(ENCRYPTION_KEY)
+
+# 2. Manejo del ciclo de vida (Lifespan)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("🚀 Iniciando servidor y conectando a MongoDB...")
+    db = get_database()
+    app.state.users_collection = db.get_collection("users")
+    yield
+    # ✅ Cerramos la conexión al apagar el servidor
+    await MongoDB.close_connection()
+
+app = FastAPI(lifespan=lifespan)
+
+origins = [
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 3. Modelos y Utilidades
+class LoginPayload(BaseModel):
+    code: str
+    verifier: str
+
+def _get_spotify_auth_header() -> str:
+    """Genera el header de Basic Auth para Confidential Client."""
+    raw = f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}".encode()
+    return base64.b64encode(raw).decode()
+
+# 4. Endpoints
+@app.post("/api/v1/auth/login")
+async def spotify_login(request: Request, payload: LoginPayload):
+    async with httpx.AsyncClient() as client:
+        
+        # A. Intercambio de código por tokens (PKCE + Client Secret)
+        token_res = await client.post(
+            "https://accounts.spotify.com/api/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": payload.code,
+                "redirect_uri": SPOTIFY_REDIRECT_URI,
+                "code_verifier": payload.verifier,
+            },
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Authorization": f"Basic {_get_spotify_auth_header()}",
+            },
         )
-async def get_users():
-    try:
-        users = db.get_collection("users")
+        
+        if token_res.status_code != 200:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Spotify Auth Error: {token_res.text}"
+            )
 
-        return UserCollection(
-            users=await users.find().to_list(1000))
-    except Exception as e:
-        raise Exception(e)
-    
-@app.get(
-        "/api/v1/tracks",
-        response_description="List all tracks",
-        response_model=TrackCollection,
-        response_model_by_alias=False)
-async def get_tracks():
-    try:
-        tracks = db.get_collection("tracks")
+        tokens = token_res.json()
 
-        return TrackCollection(
-            tracks=await tracks.find().to_list(1000))
-    except Exception as e:
-        raise Exception(e)
-    
-@app.get(
-        "/api/v1/recommendations",
-        response_description="List all recommendations",
-        response_model=RecommendationCollection,
-        response_model_by_alias=False
+        # B. Obtener perfil del usuario para el registro/login
+        user_res = await client.get(
+            "https://api.spotify.com/v1/me",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
         )
-async def get_recommendations():
-    try:
-        recommendations = db.get_collection("recommendations")
+        
+        if user_res.status_code != 200:
+            raise HTTPException(status_code=502, detail="No se pudo obtener el perfil de Spotify")
 
-        return RecommendationCollection(
-            recommendations=await recommendations.find().to_list(1000))
-    except Exception as e:
-        raise Exception(e)
+        spotify_user = user_res.json()
 
-@app.get(
-        "/api/v1/playlists",
-        response_description="List all playlists",
-        response_model=PlaylistCollection,
-        response_model_by_alias=False)
-async def get_playlists():
-    try:
-        playlists = db.get_collection("playlists")
+        # C. Cifrar el Refresh Token antes de guardarlo
+        # Importante para poder hacer 'Music Discovery' después sin pedir login
+        encrypted_refresh = fernet.encrypt(
+            tokens["refresh_token"].encode()
+        ).decode()
 
-        return PlaylistCollection(
-            playlists=await playlists.find().to_list(1000))
-    except Exception as e:
-        raise Exception(e)
+        # D. Upsert consistente usando app.state
+        await request.app.state.users_collection.update_one(
+            {"spotify_id": spotify_user["id"]},
+            {"$set": {
+                "display_name": spotify_user.get("display_name"),
+                "email": spotify_user.get("email"),
+                "profile_image": spotify_user["images"][0]["url"] if spotify_user.get("images") else None,
+                "spotify_refresh_token": encrypted_refresh,
+                "last_login": datetime.now(timezone.utc)
+            }},
+            upsert=True,
+        )
 
+        # E. Generar JWT de sesión para tu App
+        session_token = jwt.encode(
+            {
+                "sub": spotify_user["id"],
+                "exp": datetime.now(timezone.utc) + timedelta(hours=8),
+                "iat": datetime.now(timezone.utc)
+            },
+            SECRET_KEY,
+            algorithm="HS256",
+        )
+
+        return {
+            "access_token": session_token, 
+            "token_type": "bearer",
+            "user": {
+                "name": spotify_user.get("display_name"),
+                "id": spotify_user["id"]
+            }
+        }

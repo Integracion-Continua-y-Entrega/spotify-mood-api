@@ -1,84 +1,50 @@
 import { generateCodeVerifier, generateCodeChallenge } from "../utils/pkce";
 
-const DEFAULT_SCOPES = ["user-read-private", "user-read-email"];
-
-interface TokenResponse {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
-  refresh_token?: string;
-  scope: string;
+export interface SpotifyAuthConfig {
+  clientId: string;
+  redirectUri: string;
+  scopes?: string[];
 }
 
+const DEFAULT_SCOPES = ["user-read-private", "user-read-email"];
+const PKCE_VERIFIER_KEY = "spotify_pkce_verifier";
+const PKCE_STATE_KEY = "spotify_pkce_state";
+
 export async function redirectToAuthCodeFlow(
-  clientId: string,
-  scopes: string[] = DEFAULT_SCOPES,
+  config: SpotifyAuthConfig,
 ): Promise<void> {
+  const { clientId, redirectUri, scopes = DEFAULT_SCOPES } = config;
+
   if (!clientId?.trim()) {
     throw new Error("clientId es requerido para iniciar la autenticación.");
   }
+  if (!redirectUri?.trim()) {
+    throw new Error("redirectUri es requerido para iniciar la autenticación.");
+  }
 
   const verifier = generateCodeVerifier(128);
-  let challenge: string;
+  const state = crypto.randomUUID();
 
+  let challenge: string;
   try {
     challenge = await generateCodeChallenge(verifier);
   } catch (error) {
-    throw new Error(`Error criptográfico en PKCE: ${error}`);
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Error criptográfico en PKCE: ${message}`);
   }
 
-  localStorage.setItem("spotify_pkce_verifier", verifier);
-  console.log("Verifier guardado en:", window.location.origin);
+  sessionStorage.setItem(PKCE_VERIFIER_KEY, verifier);
+  sessionStorage.setItem(PKCE_STATE_KEY, state);
 
   const params = new URLSearchParams({
     client_id: clientId,
     response_type: "code",
-    redirect_uri: import.meta.env.VITE_REDIRECT_URI,
+    redirect_uri: redirectUri,
     scope: scopes.join(" "),
     code_challenge_method: "S256",
     code_challenge: challenge,
+    state,
   });
 
   window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;
-}
-
-export async function getAccessToken(
-  clientId: string,
-  code: string,
-): Promise<TokenResponse> {
-  const verifier = localStorage.getItem("spotify_pkce_verifier");
-  console.log("Intentando recuperar verifier de localStorage:", verifier);
-
-  if (!verifier) {
-    throw new Error(
-      "PKCE verifier no encontrado. Es posible que la sesión haya expirado.",
-    );
-  }
-
-  const params = new URLSearchParams({
-    client_id: clientId,
-    grant_type: "authorization_code",
-    code,
-    redirect_uri: import.meta.env.VITE_REDIRECT_URI,
-    code_verifier: verifier,
-  });
-
-  const response = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: params,
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      `Spotify API Error: ${data.error_description || data.error}`,
-    );
-  }
-
-  console.log("Token obtenido con éxito, limpiando verifier...");
-  localStorage.removeItem("spotify_pkce_verifier");
-
-  return data;
 }

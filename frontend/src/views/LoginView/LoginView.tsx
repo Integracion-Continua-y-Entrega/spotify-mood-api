@@ -5,19 +5,19 @@ export const LoginView = () => {
   const [error, setError] = useState<string | null>(null);
 
   const handleLogin = async () => {
-    const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID as
-      | string
-      | undefined;
+    const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
+    const redirectUri = import.meta.env.VITE_REDIRECT_URI;
 
     setError(null);
 
     try {
-      if (!clientId) {
+      if (!clientId || !redirectUri) {
         throw new Error(
-          "Configuración incompleta: VITE_SPOTIFY_CLIENT_ID no encontrado.",
+          "Faltan variables de entorno (Client ID o Redirect URI).",
         );
       }
-      await redirectToAuthCodeFlow(clientId);
+
+      await redirectToAuthCodeFlow({ clientId, redirectUri });
     } catch (err) {
       console.error("Auth Error:", err);
       setError("No se pudo conectar con Spotify. Intenta de nuevo.");
