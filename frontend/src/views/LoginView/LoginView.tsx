@@ -1,62 +1,94 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import { redirectToAuthCodeFlow } from "../../api/spotify";
 
 export const LoginView = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { isAuthenticated, isLoading } = useAuth();
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    const spotifyError = searchParams.get("error");
+    if (spotifyError) {
+      setError(
+        spotifyError === "access_denied"
+          ? "Acceso denegado por el usuario."
+          : "Hubo un error con Spotify.",
+      );
+    }
+
+    if (isLoading) return;
+
+    if (isAuthenticated) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [isAuthenticated, isLoading, navigate, searchParams]);
+
   const handleLogin = async () => {
-    const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
-    const redirectUri = import.meta.env.VITE_REDIRECT_URI;
-
-    setError(null);
-
     try {
+      const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
+      const redirectUri = import.meta.env.VITE_REDIRECT_URI;
+
       if (!clientId || !redirectUri) {
-        throw new Error(
-          "Faltan variables de entorno (Client ID o Redirect URI).",
-        );
+        throw new Error("Configuración incompleta (Env vars missing)");
       }
 
       await redirectToAuthCodeFlow({ clientId, redirectUri });
     } catch (err) {
-      console.error("Auth Error:", err);
-      setError("No se pudo conectar con Spotify. Intenta de nuevo.");
+      console.error("Login Error:", err);
+      setError("No se pudo iniciar la conexión con Spotify.");
     }
   };
 
+  // Pantalla de carga limpia
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#121212]">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-[#1DB954] border-t-transparent"></div>
+      </div>
+    );
+  }
+
   return (
-    <main className="flex h-screen items-center justify-center bg-[#121212] font-sans">
+    <main className="flex h-screen items-center justify-center bg-[#121212] px-4 font-sans">
       <section
-        className="bg-[#1DB954] p-10 rounded-2xl text-center w-80 shadow-[0_10px_25px_rgba(0,0,0,0.3)]"
+        className="w-full max-w-sm rounded-2xl bg-[#1DB954] p-10 text-center shadow-2xl transition-all"
         aria-labelledby="login-title"
       >
-        <h1 id="login-title" className="mb-2 text-black text-3xl font-bold">
-          Spotify Mood
-        </h1>
-        <p className="mb-6 text-[#191414] text-sm leading-relaxed">
-          Conecta tu cuenta para analizar tus canciones según tu estado de
-          ánimo.
-        </p>
+        <header>
+          <h1 id="login-title" className="mb-2 text-3xl font-black text-black">
+            Spotify Mood
+          </h1>
+          <p className="mb-8 text-sm font-medium leading-relaxed text-[#191414]/80">
+            Analiza tu biblioteca musical según tu estado de ánimo.
+          </p>
+        </header>
 
         {error && (
           <div
-            className="bg-red-600 text-white p-2 rounded-lg mb-4 text-xs animate-pulse"
+            className="mb-6 rounded-lg bg-black/20 p-3 text-xs font-bold text-red-900 animate-in fade-in zoom-in duration-300"
             role="alert"
           >
-            {error}
+            ⚠️ {error}
           </div>
         )}
 
         <button
           onClick={handleLogin}
-          className="bg-black text-white px-8 py-3 rounded-full font-bold text-base hover:scale-105 active:scale-95 transition-transform duration-200 ease-in-out shadow-lg"
+          className="w-full transform rounded-full bg-black px-8 py-4 text-base font-bold text-white shadow-xl transition-all duration-200 hover:scale-105 hover:bg-[#191414] active:scale-95 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 focus:ring-offset-[#1DB954]"
           aria-label="Iniciar sesión con Spotify"
         >
           Log in with Spotify
         </button>
+
+        <footer className="mt-6">
+          <p className="text-[10px] uppercase tracking-widest text-black/40">
+            Powered by Spotify API
+          </p>
+        </footer>
       </section>
     </main>
   );
 };
-
-export default LoginView;
