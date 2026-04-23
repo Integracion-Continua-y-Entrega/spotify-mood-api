@@ -70,75 +70,113 @@ def _get_spotify_auth_header() -> str:
 # 4. Endpoints
 @app.post("/api/v1/auth/login")
 async def spotify_login(request: Request, payload: LoginPayload):
+    print(f"--- 🟢 Iniciando Login para el código: {payload.code[:10]}... ---")
+    
     async with httpx.AsyncClient() as client:
-        
-        # A. Intercambio de código por tokens (PKCE + Client Secret)
-        token_res = await client.post(
-            "https://accounts.spotify.com/api/token",
-            data={
-                "grant_type": "authorization_code",
-                "code": payload.code,
-                "redirect_uri": SPOTIFY_REDIRECT_URI,
-                "code_verifier": payload.verifier,
-            },
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Authorization": f"Basic {_get_spotify_auth_header()}",
-            },
-        )
-        
+        # A. Intercambio de código
+        print("DEBUG: Enviando código a Spotify...")
+        try:
+            token_res = await client.post(
+                "https://accounts.spotify.com/api/token", # <-- OJO: Verifica esta URL, en tu código decía googleusercontent
+                data={
+                    "grant_type": "authorization_code",
+                    "code": payload.code,
+                    "redirect_uri": SPOTIFY_REDIRECT_URI,
+                    "code_verifier": payload.verifier,
+                },
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Authorization": f"Basic {_get_spotify_auth_header()}",
+                },
+            )
+            print(f"DEBUG: Status Spotify Token: {token_res.status_code}")
+        except Exception as e:
+            print(f"❌ Error en la petición HTTP a Spotify: {e}")
+            raise HTTPException(status_code=500, detail="Error de conexión con Spotify")
+
         if token_res.status_code != 200:
+            print(f"❌ Error de Spotify (Token): {token_res.text}")
             raise HTTPException(
                 status_code=400, 
                 detail=f"Spotify Auth Error: {token_res.text}"
             )
 
         tokens = token_res.json()
+        print("✅ Tokens obtenidos con éxito")
 
-        # B. Obtener perfil del usuario para el registro/login
+        # B. Obtener perfil
+        print("DEBUG: Obteniendo perfil de usuario...")
         user_res = await client.get(
-            "https://api.spotify.com/v1/me",
+            "https://api.spotify.com/v1/me", # <-- OJO: Verifica esta URL
             headers={"Authorization": f"Bearer {tokens['access_token']}"},
         )
         
         if user_res.status_code != 200:
+            print(f"❌ Error de Spotify (User Profile): {user_res.text}")
             raise HTTPException(status_code=502, detail="No se pudo obtener el perfil de Spotify")
 
         spotify_user = user_res.json()
+        print(f"✅ Usuario identificado: {spotify_user.get('id')}")
 
-        # C. Cifrar el Refresh Token antes de guardarlo
-        # Importante para poder hacer 'Music Discovery' después sin pedir login
-        encrypted_refresh = fernet.encrypt(
-            tokens["refresh_token"].encode()
-        ).decode()
+        # C. Cifrado
+        try:
+            encrypted_refresh = fernet.encrypt(
+                tokens["refresh_token"].encode()
+            ).decode()
+            print("✅ Refresh Token cifrado")
+        except Exception as e:
+            print(f"❌ Error al cifrar token: {e}")
+            raise HTTPException(status_code=500, detail="Error interno de cifrado")
 
         # D. Upsert consistente usando app.state
-        await request.app.state.users_collection.update_one(
-            {"spotify_id": spotify_user["id"]},
-            {"$set": {
-                "display_name": spotify_user.get("display_name"),
-                "email": spotify_user.get("email"),
-                "profile_image": spotify_user["images"][0]["url"] if spotify_user.get("images") else None,
-                "spotify_refresh_token": encrypted_refresh,
-                "last_login": datetime.now(timezone.utc)
-            }},
-            upsert=True,
-        )
+        print("DEBUG: Intentando Upsert en MongoDB...")
+        try:
+            now = datetime.now(timezone.utc)
+            
+            await request.app.state.users_collection.update_one(
+                {"spotify_id": spotify_user["id"]},
+                {
+                    # Campos que se actualizan SIEMPRE en cada login
+                    "$set": {
+                        "display_name": spotify_user.get("display_name"),
+                        "email": spotify_user.get("email"),
+                        "profile_image": spotify_user["images"][0]["url"] if spotify_user.get("images") else None,
+                        "spotify_refresh_token": encrypted_refresh,
+                        "last_login": now
+                    },
+                    # Campos que SOLO se guardan la primera vez (cuando se crea el doc)
+                    "$setOnInsert": {
+                        "spotify_id": spotify_user["id"], # También es buena práctica ponerlo aquí
+                        "created_at": now
+                    }
+                },
+                upsert=True,
+            )
+            print("✅ Base de Datos actualizada (con created_at)")
+        except Exception as e:
+            print(f"❌ Error en MongoDB: {e}")
+            raise HTTPException(status_code=500, detail=f"Error de base de datos: {str(e)}")
 
-        # E. Generar JWT de sesión para tu App
+        # E. JWT
+        print("DEBUG: Generando JWT final...")
+
+        ACCESS_TOKEN_EXPIRE_HOURS = 8  # 👈 AÑADE esta constante arriba del return
+
         session_token = jwt.encode(
             {
                 "sub": spotify_user["id"],
-                "exp": datetime.now(timezone.utc) + timedelta(hours=8),
+                "exp": datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS),  # 👈 usa la constante
                 "iat": datetime.now(timezone.utc)
             },
             SECRET_KEY,
             algorithm="HS256",
         )
 
+        print("--- 🏁 Login completado con éxito ---")
         return {
             "access_token": session_token, 
             "token_type": "bearer",
+            "expires_in": ACCESS_TOKEN_EXPIRE_HOURS * 3600,  # 👈 AÑADE ESTA LÍNEA (= 28800 segundos)
             "user": {
                 "name": spotify_user.get("display_name"),
                 "id": spotify_user["id"]
