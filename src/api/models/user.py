@@ -1,8 +1,9 @@
-from pydantic import *
+from pydantic import BaseModel, Field, ConfigDict, BeforeValidator
 from typing import Optional, Annotated
 from datetime import datetime
 
 PyObjectId = Annotated[str, BeforeValidator(str)]
+
 
 class AcousticParamRange(BaseModel):
     min: float
@@ -19,34 +20,43 @@ class AcousticProfile(BaseModel):
     instrumentalness: AcousticParam
     tempo_range: AcousticParamRange
 
+
 class Preferences(BaseModel):
-    """
-    Container for user preferences.
-    """
-    favorite_generes: list[str]
+    favorite_genres: list[str]
     language: str
     acoustic_profile: AcousticProfile
 
+
 class UserModel(BaseModel):
     """
-    Container for a single user record.
+    Representa un usuario autenticado vía Spotify en MongoDB.
     """
-
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
-    username: str
-    email: str
-    password_hash: str
+
+    spotify_id: str
+    display_name: Optional[str] = None
+    email: Optional[str] = None
+    profile_image: Optional[str] = None
+
+    spotify_refresh_token: str = Field(exclude=True)
+
     created_at: datetime
-    updated_at: datetime
+    last_login: datetime
+
     preferences: Optional[Preferences] = None
-    is_active: bool
 
     model_config = ConfigDict(
         populate_by_name=True,
         arbitrary_types_allowed=True,
         json_schema_extra={
             "example": {
-                "name": "Jane Doe"
+                "spotify_id": "31xyzabc123",
+                "display_name": "Jane Doe",
+                "email": "jane@example.com",
+                "profile_image": "https://i.scdn.co/image/abc123",
+                "created_at": "2024-01-15T10:30:00Z",
+                "last_login": "2024-06-01T08:00:00Z",
+                "preferences": None
             }
-        } 
+        }
     )

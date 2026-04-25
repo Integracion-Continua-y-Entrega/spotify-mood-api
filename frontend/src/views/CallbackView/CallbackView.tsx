@@ -66,20 +66,6 @@ export const CallbackView = () => {
 
         const data = await response.json();
 
-        // 👇 ESTE LOG ES EL MÁS IMPORTANTE
-        console.log(
-          "📦 [CallbackView] Respuesta completa del backend:",
-          JSON.stringify(data, null, 2),
-        );
-        console.log(
-          "📦 [CallbackView] data.access_token:",
-          data.access_token ?? "❌ UNDEFINED",
-        );
-        console.log(
-          "📦 [CallbackView] data.expires_in:",
-          data.expires_in ?? "❌ UNDEFINED",
-        );
-
         login({
           access_token: data.access_token,
           expires_in: data.expires_in,
