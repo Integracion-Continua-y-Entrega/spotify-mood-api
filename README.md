@@ -1,240 +1,143 @@
-# 🎵 Spotify Mood API
+# 🎵 Spotify Mood API (Monorepo)
 
-API para recomendación musical basada en estados de ánimo utilizando atributos de audio de Spotify.
-
-## 🧠 Descripción de la API
-
-### 📌 Problema
-
-La sobreoferta de contenido en plataformas de streaming musical ha generado un fenómeno conocido como "fatiga de decisión". Los usuarios de Spotify se enfrentan a millones de canciones disponibles, lo que dificulta encontrar contenido que se alinee con su estado emocional en un momento específico.
-
-Aunque existen listas de reproducción automatizadas, estas no siempre logran capturar de manera precisa el contexto emocional del usuario, lo que limita la experiencia de descubrimiento musical.
+API para recomendación musical basada en estados de ánimo utilizando los atributos de audio (Audio Features) de Spotify. Este proyecto utiliza una arquitectura de monorepo que integra un Frontend en React/Vite y un Backend en FastAPI.
 
 ---
 
-### 💡 Solución
+## 🏗️ Estructura del Proyecto
 
-La API **Spotify Mood API** propone un enfoque basado en el análisis de atributos de audio proporcionados por Spotify (Audio Features), tales como energía, valencia y tempo.
+El repositorio está organizado de la siguiente manera:
 
-A través de estos datos, la API clasifica y recomienda canciones según estados de ánimo específicos (por ejemplo: feliz, relajado, melancólico o enérgico), permitiendo una experiencia de descubrimiento musical más personalizada, rápida y contextual.
+- `/frontend`: Aplicación cliente desarrollada con React y Vite.
+- `/backend`: API desarrollada con FastAPI, ubicada específicamente en `src/api`.
 
 ---
 
-### ⚙️ Enfoque técnico
+## 🔄 Flujo de Autenticación
 
-El sistema se basa en una arquitectura de servicios donde:
+El sistema implementa OAuth 2.0 con PKCE (Proof Key for Code Exchange), lo que permite una autenticación segura sin necesidad de exponer el `Client Secret` en el lado del cliente.
 
-- Se consumen datos desde la API de Spotify.
-- Se procesan atributos musicales relevantes.
-- Se aplican reglas o lógica de clasificación para mapear canciones a emociones.
-- Se exponen endpoints simples para facilitar su integración con aplicaciones frontend.
+- **Cifrado:** Los `refresh_tokens` se almacenan en MongoDB cifrados mediante Fernet.
+- **Sesión:** Una vez autenticado, el sistema genera un JWT (JSON Web Token) para manejar la sesión del usuario de forma segura.
 
-Este enfoque permite desacoplar la lógica de negocio y facilitar la escalabilidad del sistema.
+---
 
-## 🏗️ Diagrama de Arquitectura
+## 🚀 Instalación y Configuración
 
-### 🔄 Flujo general del sistema
-
-El sistema sigue una arquitectura basada en servicios donde el cliente interactúa con una API backend desarrollada en FastAPI. Esta API gestiona la autenticación con Spotify mediante **OAuth 2.0 (Authorization Code with PKCE Flow)**, procesa la lógica de recomendación musical y almacena información relevante en una base de datos MongoDB.
-
-La API también se comunica con la Spotify Web API para obtener datos musicales en tiempo real.
-
-```mermaid
-graph TD
-
-A[Cliente / Postman] --> B[FastAPI Backend]
-
-B --> C[Spotify Web API]
-B --> D[MongoDB]
-
-C --> B
-D --> B
-
-B --> A
-```
-
-### 🧩 Componentes del sistema
-
-- **Cliente / Frontend**  
-  Realiza peticiones HTTP a la API. Para pruebas se utiliza Postman.
-
-- **FastAPI (Backend)**  
-  Maneja la lógica de negocio, autenticación con Spotify (OAuth 2.0 Authorization Code Flow) y procesamiento de recomendaciones.
-
-- **MongoDB**  
-  Almacena información persistente como perfiles de usuario e historial de recomendaciones.
-
-- **Spotify Web API**  
-  Proporciona datos musicales y atributos de audio utilizados para generar recomendaciones.
-
-## 🚀 Requisitos previos
-
-Antes de ejecutar el proyecto, asegúrate de tener instalado lo siguiente:
-
-- **Python** 3.10 o superior
-- **MongoDB** (local o en la nube con MongoDB Atlas)
-- **Credenciales de Spotify** (Client ID y Client Secret desde el [Spotify Developer Dashboard](https://developer.spotify.com/dashboard))
-
-## 🛠️ Instalación y configuración
-
-**1. Clona el repositorio:**
+### 1. Clonar el repositorio
 
 ```bash
 git clone https://github.com/tu-usuario/spotify-mood-api.git
 cd spotify-mood-api
 ```
 
-**2. Crea y activa un entorno virtual:**
+### 2. Configuración del Backend
+
+Navega a la carpeta del backend e instala las dependencias:
 
 ```bash
+cd backend
 python -m venv venv
-source venv/bin/activate
-venv\Scripts\activate
-```
-
-**3. Instala las dependencias:**
-
-```bash
+# Activa el entorno (Windows: venv\Scripts\activate | Unix: source venv/bin/activate)
 pip install -r requirements.txt
 ```
 
-**4. Configura las variables de entorno:**
+Crea un archivo `.env` en la raíz del backend con los siguientes campos:
 
-```bash
-cp .env.example .env
+```env
+SPOTIFY_CLIENT_ID=tu_client_id
+SPOTIFY_CLIENT_SECRET=tu_client_secret
+SPOTIFY_REDIRECT_URI=http://localhost:5173/callback
+
+# Generar con: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+TOKEN_ENCRYPTION_KEY=tu_fernet_key
+
+# Generar con: python -c "import secrets; print(secrets.token_urlsafe(32))"
+JWT_SECRET_KEY=tu_jwt_secret
+
+MONGO_URI=mongodb://localhost:27017
+MONGO_DB=spotify_mood_db
 ```
 
-Edita el archivo `.env` con tus credenciales reales (ver sección de [Variables de entorno](#-variables-de-entorno)).
+### 3. Configuración del Frontend
 
-## ▶️ Cómo ejecutar
+Navega a la carpeta del frontend e instala las dependencias de Node:
 
 ```bash
+cd ../frontend
+npm install
+```
+
+Crea un archivo `.env` en la raíz del frontend:
+
+```env
+VITE_SPOTIFY_CLIENT_ID=tu_client_id
+VITE_REDIRECT_URI=http://localhost:5173/callback
+VITE_API_URL=http://localhost:8000
+```
+
+---
+
+## ▶️ Ejecución del Proyecto
+
+Para trabajar en el proyecto, debes iniciar ambos servicios:
+
+**Ejecutar Backend:**
+
+```bash
+cd backend/src/api
 uvicorn main:app --reload
 ```
 
-La API estará disponible en `http://localhost:8000`.  
-La documentación interactiva (Swagger UI) estará en `http://localhost:8000/docs`.
+La API estará en `http://localhost:8000` y la documentación en `/docs`.
 
-## 🐳 Docker
-
-Asegúrate de tener configurado tu archivo `.env` correctamente, de lo contrario los servicios no iniciarán correctamente.
-
-Luego ejecuta:
+**Ejecutar Frontend:**
 
 ```bash
-docker-compose up --build
+cd frontend
+npm run dev
 ```
 
-> La API estará disponible en `http://localhost:8000`.  
+El cliente estará disponible en `http://localhost:5173`.
 
-## 🌐 Endpoints de la API
+---
 
-### Endpoints de la API
+## 🌐 Endpoints Principales
 
-| Método | Ruta | Parámetros | Descripción |
-| :--- | :--- | :--- | :--- |
-| **GET** | `/users/me` | Ninguno | Obtiene el perfil del usuario autenticado desde Spotify. |
-| **PATCH** | `/users/me` | `preferred_moods` | Actualiza información del perfil del usuario. |
-| **GET** | `/callback` | `code`, `state` | Endpoint para procesar el código de Spotify e intercambiarlo por tokens. |
-| **GET** | `/tracks` | `limit` | Busca pistas de audio en el catálogo local. |
-| **GET** | `/users/me/playlists` | Ninguno | Recupera las playlists creadas o seguidas por el usuario. |
-| **GET** | `/users/me/recommendations` | `limit`, `genres`, `mood` | Obtiene sugerencias musicales basadas en los gustos del usuario. |
-| **POST** | `/users/me/playlists` | `name`, `description` | Crea una nueva playlist en la cuenta de Spotify del usuario. |
-| **POST** | `/users/me/recommendations` | `mood`, `track_ids` | Guarda una selección de recomendaciones en la base de datos. |
-| **DELETE** | `/users/me/recommendations` | `recommendation_id` | Elimina un registro específico del historial de recomendaciones. |
+| Método | Ruta                 | Descripción                                                             |
+| ------ | -------------------- | ----------------------------------------------------------------------- |
+| `POST` | `/api/v1/auth/login` | Intercambia el código de Spotify por tokens, cifra y guarda al usuario. |
+| `GET`  | `/recommendations`   | Genera tracks basados en el `mood` solicitado.                          |
+| `GET`  | `/history`           | Recupera el historial almacenado en MongoDB.                            |
 
-### 🎭 Valores válidos para `mood`
-
-El parámetro `mood` del endpoint `/recommendations` acepta los siguientes valores:
-
-| Valor         | Estado de ánimo |
-| ------------- | --------------- |
-| `happy`       | Feliz           |
-| `relaxed`     | Relajado        |
-| `melancholic` | Melancólico     |
-| `energetic`   | Enérgico        |
-
-**Ejemplo de uso:**
-
-```
-GET /recommendations?mood=happy
-```
-
-### 📌 Notas de diseño
-
-- La API sigue principios REST para mantener claridad y escalabilidad.
-- Las rutas están diseñadas para ser intuitivas y fáciles de consumir.
-- Se prioriza el uso de métodos HTTP adecuados (GET, POST).
-- Las respuestas se devuelven en formato JSON para facilitar la integración con clientes frontend.
+---
 
 ## 🗄️ Modelo de Datos (MongoDB)
 
-### 📌 Descripción
+El sistema utiliza un enfoque documental para evitar JOINs costosos y mejorar la velocidad de respuesta.
 
-El sistema utiliza MongoDB como base de datos NoSQL para almacenar información de usuarios y el historial de recomendaciones. Esto permite flexibilidad en la estructura de datos y escalabilidad en el manejo de información.
+### Colección: `users`
 
-### 👤 Colección: users
+Almacena el perfil y las credenciales cifradas:
 
 ```json
 {
   "spotify_id": "string",
   "display_name": "string",
-  "preferred_moods": ["string"],
-  "created_at": "timestamp"
+  "email": "string",
+  "spotify_refresh_token": "cifrado_fernet",
+  "last_login": "timestamp",
+  "preferences": {
+    "favorite_genres": ["string"],
+    "acoustic_profile": {}
+  }
 }
 ```
 
-**Campos:**
+---
 
-- `spotify_id`: Identificador único del usuario en Spotify.
-- `display_name`: Nombre visible del usuario.
-- `preferred_moods`: Lista de estados de ánimo preferidos para personalización.
-- `created_at`: Fecha de registro del usuario en el sistema.
+## 🔐 Seguridad
 
-### 🎧 Colección: recommendations_history
-
-```json
-{
-  "user_id": "string",
-  "mood": "string",
-  "tracks": [
-    {
-      "id": "string",
-      "name": "string",
-      "artist": "string"
-    }
-  ],
-  "timestamp": "datetime"
-}
-```
-
-**Campos:**
-
-- `user_id`: Referencia al usuario que solicitó la recomendación.
-- `mood`: Estado de ánimo utilizado para la recomendación.
-- `tracks`: Lista de canciones recomendadas.
-- `timestamp`: Fecha y hora de la recomendación.
-
-## 🔐 Gestión de Seguridad y Entorno
-
-### 🚨 Política de Seguridad
-
-Este proyecto sigue la política de:
-
-**"Cero credenciales en el repositorio"**
-
-Ninguna clave, token o configuración sensible debe ser subida a GitHub.
-
-### 📄 Variables de entorno
-
-Se utiliza un archivo `.env` para gestionar configuraciones sensibles.
-
-Ejemplo (`.env.example`):
-
-```env
-SPOTIFY_CLIENT_ID=your_client_id_here
-SPOTIFY_CLIENT_SECRET=your_client_secret_here
-SPOTIFY_REDIRECT_URI=http://localhost:8000/callback
-
-MONGO_URI=mongodb://localhost:27017
-```
+- **Fail-fast:** El sistema valida las variables de entorno al arranque para evitar errores en tiempo de ejecución.
+- **Cifrado Simétrico:** Uso de la librería `cryptography` para proteger tokens sensibles.
+- **Validación de Esquemas:** Uso de Pydantic v2 para asegurar que los datos en la base de datos coincidan con la lógica del negocio.

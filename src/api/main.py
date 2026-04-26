@@ -1,72 +1,81 @@
-from fastapi import FastAPI
-from models.users_collection import UserCollection
-from models.tracks_collection import TrackCollection
-from models.recommendations_collection import RecommendationCollection
-from models.playlists_collection import PlaylistCollection
-from db.connection import get_database, get_collections
+import os
+import httpx
+from contextlib import asynccontextmanager
 
-app = FastAPI()
-db = get_database()
+from fastapi import FastAPI, Request
+from pydantic import BaseModel
+from dotenv import load_dotenv
+from cryptography.fernet import Fernet
+from fastapi.middleware.cors import CORSMiddleware
 
-@app.get("/api/v1/health")
-async def get_api_health():
-    return {"status": "ok"}
+from db.connection import get_database, MongoDB
+from services.spotify_auth import (
+    exchange_code_for_tokens,
+    fetch_spotify_profile,
+    encrypt_refresh_token,
+    upsert_user,
+    create_session_jwt,
+)
 
-@app.get(
-        "/api/v1/users",
-        response_description="List all users",
-        response_model=UserCollection,
-        response_model_by_alias=False
+load_dotenv()
+
+def _require_env(key: str) -> str:
+    value = os.environ.get(key)
+    if not value:
+        raise RuntimeError(f"❌ Variable de entorno requerida no encontrada: {key}")
+    return value
+
+SECRET_KEY            = _require_env("JWT_SECRET_KEY")
+SPOTIFY_CLIENT_ID     = _require_env("SPOTIFY_CLIENT_ID")
+SPOTIFY_CLIENT_SECRET = _require_env("SPOTIFY_CLIENT_SECRET")
+SPOTIFY_REDIRECT_URI  = _require_env("SPOTIFY_REDIRECT_URI")
+ENCRYPTION_KEY        = _require_env("TOKEN_ENCRYPTION_KEY")
+
+fernet = Fernet(ENCRYPTION_KEY)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    db = get_database()
+    app.state.users_collection = db.get_collection("users")
+    yield
+    await MongoDB.close_connection()
+
+app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+class LoginPayload(BaseModel):
+    code: str
+    verifier: str
+
+
+@app.post("/api/v1/auth/login")
+async def spotify_login(request: Request, payload: LoginPayload):
+    async with httpx.AsyncClient() as client:
+        tokens = await exchange_code_for_tokens(
+            client, payload.code, payload.verifier,
+            SPOTIFY_REDIRECT_URI, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET,
         )
-async def get_users():
-    try:
-        users = db.get_collection("users")
+        spotify_user = await fetch_spotify_profile(client, tokens["access_token"])
 
-        return UserCollection(
-            users=await users.find().to_list(1000))
-    except Exception as e:
-        raise Exception(e)
-    
-@app.get(
-        "/api/v1/tracks",
-        response_description="List all tracks",
-        response_model=TrackCollection,
-        response_model_by_alias=False)
-async def get_tracks():
-    try:
-        tracks = db.get_collection("tracks")
+    encrypted_refresh = encrypt_refresh_token(fernet, tokens["refresh_token"])
+    await upsert_user(request.app.state.users_collection, spotify_user, encrypted_refresh)
+    session_token, expires_in = create_session_jwt(spotify_user["id"], SECRET_KEY)
 
-        return TrackCollection(
-            tracks=await tracks.find().to_list(1000))
-    except Exception as e:
-        raise Exception(e)
-    
-@app.get(
-        "/api/v1/recommendations",
-        response_description="List all recommendations",
-        response_model=RecommendationCollection,
-        response_model_by_alias=False
-        )
-async def get_recommendations():
-    try:
-        recommendations = db.get_collection("recommendations")
-
-        return RecommendationCollection(
-            recommendations=await recommendations.find().to_list(1000))
-    except Exception as e:
-        raise Exception(e)
-
-@app.get(
-        "/api/v1/playlists",
-        response_description="List all playlists",
-        response_model=PlaylistCollection,
-        response_model_by_alias=False)
-async def get_playlists():
-    try:
-        playlists = db.get_collection("playlists")
-
-        return PlaylistCollection(
-            playlists=await playlists.find().to_list(1000))
-    except Exception as e:
-        raise Exception(e)
-
+    return {
+        "access_token": session_token,
+        "token_type": "bearer",
+        "expires_in": expires_in,
+        "user": {
+            "name": spotify_user.get("display_name"),
+            "id": spotify_user["id"],
+        },
+    }
