@@ -17,6 +17,8 @@ from services.spotify_auth import (
     create_session_jwt,
 )
 
+from routers import playlists, recommendations, tracks, users
+
 load_dotenv()
 
 def _require_env(key: str) -> str:
@@ -33,7 +35,6 @@ ENCRYPTION_KEY        = _require_env("TOKEN_ENCRYPTION_KEY")
 
 fernet = Fernet(ENCRYPTION_KEY)
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db = get_database()
@@ -42,6 +43,10 @@ async def lifespan(app: FastAPI):
     await MongoDB.close_connection()
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(playlists.router)
+app.include_router(recommendations.router)
+app.include_router(users.router)
+app.include_router(tracks.router)
 
 app.add_middleware(
     CORSMiddleware,

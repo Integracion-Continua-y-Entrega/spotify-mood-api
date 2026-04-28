@@ -1,11 +1,11 @@
-from db.connection import get_collections, get_database
+from db.connection import MongoDB, get_database
 from services.playlist_service import PlaylistService
 from services.recommendation_service import RecommendationService
 from services.track_service import TrackService
 from services.user_service import UserService 
 
 db = get_database()
-collections = get_collections(db=db)
+collections = MongoDB.get_collections(db=db)
 
 def get_user_service() -> UserService:
     return UserService(collection=collections["users"])
