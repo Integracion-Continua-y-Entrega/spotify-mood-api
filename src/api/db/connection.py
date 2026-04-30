@@ -1,35 +1,60 @@
 import os
-from pymongo import AsyncMongoClient
-from pymongo.errors import ConnectionFailure
+import logging
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from dotenv import load_dotenv
 
-# TODO: 1. Reemplazar MongoClient por AsyncMongoClient
-def get_database():
-    """
-    Retorna la instancia de la base de datos.
-    Lee las credenciales exclusivamente desde variables de entorno.
-    """
-    mongo_uri = os.getenv("MONGO_URI")
-    db_name   = os.getenv("MONGO_DB", "music_recommendations")
+load_dotenv()
 
-    if not mongo_uri:
-        raise EnvironmentError("MONGO_URI no está definida en las variables de entorno.")
+# Configuración de logs para monitorear la conexión
+logger = logging.getLogger("uvicorn.error")
 
-    client = AsyncMongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
+class MongoDB:
+    """Clase Singleton para gestionar la conexión a MongoDB."""
+    client: AsyncIOMotorClient = None
+    database: AsyncIOMotorDatabase = None
 
-    try:
-        client.admin.command("ping")
-        print("Conexión a MongoDB exitosa.")
-    except ConnectionFailure as e:
-        raise ConnectionFailure(f"No se pudo conectar a MongoDB: {e}")
+    @classmethod
+    def get_collections(self):
+        return {
+            "users":           self.database["users"],
+            "tracks":          self.database["tracks"],
+            "recommendations": self.database["recommendations"],
+            "playlists":       self.database["playlists"],
+        }
 
-    return client[db_name]
+    @classmethod
+    def get_client(cls) -> AsyncIOMotorClient:
+        if cls.client is None:
+            mongo_uri = os.getenv("MONGO_URI")
+            if not mongo_uri:
+                logger.error("❌ MONGO_URI no definida en .env")
+                raise RuntimeError("MONGO_URI no configurada.")
+            
+            # Configuramos el cliente con un pool de conexiones optimizado
+            cls.client = AsyncIOMotorClient(
+                mongo_uri,
+                serverSelectionTimeoutMS=5000,
+                maxPoolSize=10,
+                minPoolSize=1
+            )
+            logger.info("🔌 Cliente MongoDB inicializado.")
+        return cls.client
 
+    @classmethod
+    def get_db(cls) -> AsyncIOMotorDatabase:
+        if cls.database is None:
+            db_name = os.getenv("MONGO_DB", "music_recommendations")
+            client = cls.get_client()
+            cls.database = client[db_name]
+        return cls.database
 
-# Colecciones disponibles
-def get_collections(db):
-    return {
-        "users":           db["users"],
-        "tracks":          db["tracks"],
-        "recommendations": db["recommendations"],
-        "playlists":       db["playlists"],
-    }
+    @classmethod
+    async def close_connection(cls):
+        if cls.client:
+            cls.client.close()
+            logger.info("🛑 Conexión a MongoDB cerrada.")
+
+# Función de conveniencia para main.py
+def get_database() -> AsyncIOMotorDatabase:
+    return MongoDB.get_db()
+    
