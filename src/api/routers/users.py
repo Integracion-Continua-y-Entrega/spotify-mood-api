@@ -5,7 +5,7 @@ from services.user_service import UserService
 from models.users_collection import UserCollection
 from dependencies import get_user_service
 
-router = APIRouter(prefix="/api/v1")
+router = APIRouter()
 
 @router.get(
         "/users",

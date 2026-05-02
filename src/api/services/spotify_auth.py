@@ -1,14 +1,8 @@
 import base64
 import httpx
-from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
-from jose import jwt
 from cryptography.fernet import Fernet
-from motor.motor_asyncio import AsyncIOMotorCollection
-
-
-ACCESS_TOKEN_EXPIRE_HOURS = 8
 
 
 def _spotify_basic_header(client_id: str, client_secret: str) -> str:
@@ -72,55 +66,3 @@ def encrypt_refresh_token(fernet: Fernet, refresh_token: str) -> str:
     except Exception:
         raise HTTPException(status_code=500, detail="Error interno de cifrado")
 
-
-async def upsert_user(
-    collection: AsyncIOMotorCollection,
-    spotify_user: dict,
-    encrypted_refresh: str,
-) -> None:
-    """Crea o actualiza el usuario en MongoDB."""
-    now = datetime.now(timezone.utc)
-    try:
-        await collection.update_one(
-            {"spotify_id": spotify_user["id"]},
-            {
-                "$set": {
-                    "display_name": spotify_user.get("display_name"),
-                    "email": spotify_user.get("email"),
-                    "profile_image": (
-                        spotify_user["images"][0]["url"]
-                        if spotify_user.get("images")
-                        else None
-                    ),
-                    "spotify_refresh_token": encrypted_refresh,
-                    "last_login": now,
-                },
-                "$setOnInsert": {
-                    "spotify_id": spotify_user["id"],
-                    "created_at": now,
-                },
-            },
-            upsert=True,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error de base de datos: {str(e)}")
-
-
-def create_session_jwt(spotify_id: str, secret_key: str) -> tuple[str, int]:
-    """
-    Genera el JWT de sesión.
-    Retorna (token, expires_in_seconds).
-    """
-    expires_in = ACCESS_TOKEN_EXPIRE_HOURS * 3600
-    now = datetime.now(timezone.utc)
-
-    token = jwt.encode(
-        {
-            "sub": spotify_id,
-            "iat": now,
-            "exp": now + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS),
-        },
-        secret_key,
-        algorithm="HS256",
-    )
-    return token, expires_in

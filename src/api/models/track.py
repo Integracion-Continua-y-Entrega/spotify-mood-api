@@ -7,7 +7,7 @@ PyObjectId = Annotated[str, BeforeValidator(str)]
 class AcousticFeatures(BaseModel):
     energy: float = Field(ge=0.0, le=1.0)
     danceability: float = Field(ge=0.0, le=1.0)
-    # Equivalente a happiness?
+    # Equivalente a happiness
     valence: float = Field(ge=0.0, le=1.0)
     acousticness: float = Field(ge=0.0, le=1.0)
     instrumentalness: float = Field(ge=0.0, le=1.0)
@@ -28,10 +28,10 @@ class Track(BaseModel):
     title: str
     artist: str
     album: str
-    release_year: int
+    release_year: Optional[int]
     duration_ms: int
     genre: list[str]
-    language: str
+    language: Optional[str]
     external_ids: ExternalIds
     acoustic_features: AcousticFeatures
-    added_at: datetime
+    added_at: datetime = Field(default_factory=datetime.now)

@@ -10,3 +10,6 @@ class RecommendationService:
                 recommendations=await self.recommendations.find().to_list(1000))
         except Exception as e:
             raise Exception(e)
+        
+    async def recommend():
+        pass

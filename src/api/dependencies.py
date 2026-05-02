@@ -1,3 +1,4 @@
+from services.auth_service import AuthService
 from db.connection import get_database, MongoDB
 from services.playlist_service import PlaylistService
 from services.recommendation_service import RecommendationService
@@ -18,3 +19,6 @@ def get_recommendation_service() -> RecommendationService:
 
 def get_playlist_service() -> PlaylistService:
     return PlaylistService(collection=collections["playlists"])
+
+def get_auth_service() -> AuthService:
+    return AuthService()

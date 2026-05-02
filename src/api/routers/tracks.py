@@ -4,7 +4,7 @@ from dependencies import get_track_service
 from models.tracks_collection import TrackCollection
 from services.track_service import TrackService
 
-router = APIRouter(prefix="/api/v1")
+router = APIRouter()
 
 @router.get(
         "/tracks",
