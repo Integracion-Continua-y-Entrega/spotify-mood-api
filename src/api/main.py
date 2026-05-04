@@ -3,9 +3,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from db.connection import get_database, MongoDB
 from routers import playlists, recommendations, tracks, users, auth
+import logging
 
 description = """
-🎶 **Spotify Manager API** ayuda a gestionar tus listas y descubrir música.
+🎶 **Spotify Mood API** ayuda a gestionar tus listas y descubrir música.
 
 ## Recursos
 * **Users**: Gestión de perfiles y sincronización.
@@ -13,6 +14,11 @@ description = """
 * **Recommendations**: Algoritmos basados en tus gustos.
 * **Auth**: Flujo seguro con Spotify OAuth2 + JWT.
 """
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -34,17 +40,17 @@ app = FastAPI(
     ]
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173", "http://0.0.0.0:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Inclusión de routers con etiquetas
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(playlists.router, prefix="/api/v1/playlists", tags=["playlists"])
 app.include_router(tracks.router, prefix="/api/v1/tracks", tags=["tracks"])
 app.include_router(recommendations.router, prefix="/api/v1/recommendations", tags=["recommendations"])
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)

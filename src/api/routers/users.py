@@ -4,6 +4,8 @@ from models.user import UserModel
 from services.user_service import UserService
 from models.users_collection import UserCollection
 from dependencies import get_user_service
+from dependencies import get_track_service
+
 
 router = APIRouter()
 

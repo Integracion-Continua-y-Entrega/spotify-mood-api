@@ -1,3 +1,4 @@
+from models.mood import Mood
 from models.recommendations_collection import RecommendationCollection
 
 class RecommendationService:
@@ -11,5 +12,6 @@ class RecommendationService:
         except Exception as e:
             raise Exception(e)
         
-    async def recommend():
+    async def recommend(mood: Mood):
+        
         pass

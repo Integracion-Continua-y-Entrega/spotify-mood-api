@@ -24,14 +24,14 @@ class ExternalIds(BaseModel):
     isrc: Optional[str] = None
 
 class Track(BaseModel):
-    id: Optional[PyObjectId] = Field(alias="_id")
+    id: Optional[PyObjectId] = Field(default=None, alias="_id")
     title: str
     artist: str
     album: str
-    release_year: Optional[int]
+    release_year: Optional[int] = None
     duration_ms: int
-    genre: list[str]
-    language: Optional[str]
+    genre: Optional[list[str]] = None
+    language: Optional[str] = None
     external_ids: ExternalIds
     acoustic_features: AcousticFeatures
     added_at: datetime = Field(default_factory=datetime.now)

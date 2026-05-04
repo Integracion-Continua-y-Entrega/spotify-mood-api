@@ -43,7 +43,7 @@ class MongoDB:
     @classmethod
     def get_db(cls) -> AsyncIOMotorDatabase:
         if cls.database is None:
-            db_name = os.getenv("MONGO_DB", "music_recommendations")
+            db_name = os.getenv("MONGO_DB", "spotify_mood_db")
             client = cls.get_client()
             cls.database = client[db_name]
         return cls.database

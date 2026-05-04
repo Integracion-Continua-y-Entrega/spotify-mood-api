@@ -5,8 +5,9 @@ import httpx
 from jose import jwt
 from cryptography.fernet import Fernet
 
+from services.track_service import TrackService
 from models.login_payload import LoginPayload
-from services.spotify_auth import encrypt_refresh_token, exchange_code_for_tokens, fetch_spotify_profile
+from services.spotify_service import encrypt_refresh_token, exchange_code_for_tokens, fetch_spotify_profile, fetch_user_top_tracks
 from services.user_service import UserService
 
 ACCESS_TOKEN_EXPIRE_HOURS = 8
@@ -28,7 +29,8 @@ ENCRYPTION_KEY        = _require_env("TOKEN_ENCRYPTION_KEY")
 fernet = Fernet(ENCRYPTION_KEY)
 
 class AuthService():
-            
+    
+    @staticmethod
     async def create_session_jwt(spotify_id: str, secret_key: str) -> tuple[str, int]:
         """
         Genera el JWT de sesión.
@@ -48,17 +50,23 @@ class AuthService():
         )
         return token, expires_in
     
-    async def spotify_login(self, payload: LoginPayload, user_service: UserService):
+    async def spotify_login(self, payload: LoginPayload, user_service: UserService, track_service: TrackService):
         async with httpx.AsyncClient() as client:
             tokens = await exchange_code_for_tokens(
                 client, payload.code, payload.verifier,
                 SPOTIFY_REDIRECT_URI, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET,
             )
+
             spotify_user = await fetch_spotify_profile(client, tokens["access_token"])
 
+            spotify_user_top_tracks = await fetch_user_top_tracks(client, tokens["access_token"])
+
         encrypted_refresh = encrypt_refresh_token(fernet, tokens["refresh_token"])
+        session_token, expires_in = await self.create_session_jwt(spotify_user["id"], SECRET_KEY)
+
+        # Setup del usuario
         await user_service.upsert_user(spotify_user, encrypted_refresh)
-        session_token, expires_in = self.create_session_jwt(spotify_user["id"], SECRET_KEY)
+        await user_service.update_user_preferences(spotify_user["id"], spotify_user_top_tracks["items"], track_service)
 
         return {
             "access_token": session_token,
