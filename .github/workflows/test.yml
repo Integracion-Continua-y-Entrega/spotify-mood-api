@@ -33,7 +33,7 @@ jobs:
 
     - name: Ejecutar Pruebas
       env:
-        # Variables requeridas por tu función _require_env en main.py[cite: 1]
+        # Variables requeridas por la función _require_env en main.py[cite: 1]
         JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
         SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
         SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}

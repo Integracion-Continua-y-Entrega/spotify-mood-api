@@ -35,7 +35,7 @@ jobs:
 
     - name: Ejecutar pruebas de Login
       env:
-        # Extraemos los valores de los Secrets que configuraste
+        # Extraemos los valores de los Secrets
         JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
         TOKEN_ENCRYPTION_KEY: ${{ secrets.TOKEN_ENCRYPTION_KEY }}
         SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}

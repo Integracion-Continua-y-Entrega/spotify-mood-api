@@ -11,20 +11,20 @@ services:
   # Backend (FastAPI)
   backend:
     build: 
-      context: ./src/api  # <--- IMPORTANTE: Usamos la ruta real
+      context: ./src/api  
       dockerfile: Dockerfile
     container_name: spotify_backend
     ports:
       - "8000:8000"
     env_file:
-      - ./src/api/.env    # <--- IMPORTANTE: Apuntamos al archivo que acabas de crear
+      - ./src/api/.env    
     depends_on:
       - mongodb
     environment:
       - MONGO_URI=mongodb://mongodb:27017
       - MONGO_DB=spotify_mood_db
 
-  # Frontend (React/Vite) - ¡LA PARTE NUEVA!
+  # Frontend (React/Vite) 
   frontend:
     build: 
       context: ./frontend
