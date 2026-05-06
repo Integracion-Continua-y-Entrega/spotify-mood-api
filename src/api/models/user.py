@@ -22,8 +22,8 @@ class AcousticProfile(BaseModel):
 
 
 class Preferences(BaseModel):
-    favorite_genres: list[str]
-    language: str
+    favorite_genres: Optional[list[str]] = None
+    language: Optional[str] = None
     acoustic_profile: AcousticProfile
 
 
@@ -41,11 +41,13 @@ class UserModel(BaseModel):
     spotify_refresh_token: str = Field(exclude=True)
 
     created_at: datetime
-    last_login: datetime
+    last_login: Optional[datetime] = None 
 
     preferences: Optional[Preferences] = None
+    is_active: bool = True
 
     model_config = ConfigDict(
+        validate_assignment=True,
         populate_by_name=True,
         arbitrary_types_allowed=True,
         json_schema_extra={

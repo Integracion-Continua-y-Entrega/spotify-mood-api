@@ -14,6 +14,15 @@ class MongoDB:
     database: AsyncIOMotorDatabase = None
 
     @classmethod
+    def get_collections(self):
+        return {
+            "users":           self.database["users"],
+            "tracks":          self.database["tracks"],
+            "recommendations": self.database["recommendations"],
+            "playlists":       self.database["playlists"],
+        }
+
+    @classmethod
     def get_client(cls) -> AsyncIOMotorClient:
         if cls.client is None:
             mongo_uri = os.getenv("MONGO_URI")
@@ -34,7 +43,7 @@ class MongoDB:
     @classmethod
     def get_db(cls) -> AsyncIOMotorDatabase:
         if cls.database is None:
-            db_name = os.getenv("MONGO_DB", "music_recommendations")
+            db_name = os.getenv("MONGO_DB", "spotify_mood_db")
             client = cls.get_client()
             cls.database = client[db_name]
         return cls.database
@@ -48,3 +57,4 @@ class MongoDB:
 # Función de conveniencia para main.py
 def get_database() -> AsyncIOMotorDatabase:
     return MongoDB.get_db()
+    
