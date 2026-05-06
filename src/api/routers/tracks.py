@@ -7,7 +7,7 @@ from services.track_service import TrackService
 router = APIRouter()
 
 @router.get(
-        "/tracks",
+        "",
         response_description="List all tracks",
         response_model=TrackCollection,
         response_model_by_alias=True,

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import os
 from dotenv import load_dotenv
+from fastapi import HTTPException
 import httpx
 from jose import jwt
 from cryptography.fernet import Fernet
@@ -66,7 +67,7 @@ class AuthService():
 
         # Setup del usuario
         await user_service.upsert_user(spotify_user, encrypted_refresh)
-        await user_service.update_user_preferences(spotify_user["id"], spotify_user_top_tracks["items"], track_service)
+        await user_service.update_user_preferences(spotify_user["id"], spotify_user_top_tracks, track_service)
 
         return {
             "access_token": session_token,
@@ -76,4 +77,39 @@ class AuthService():
                 "name": spotify_user.get("display_name"),
                 "id": spotify_user["id"],
             },
+        }
+    
+    async def refresh_session(self, spotify_id: str, user_service: UserService):
+        user = await user_service.find_by_spotify_id(spotify_id)
+        if not user or not user.is_active:
+            raise HTTPException(status_code=401, detail="Usuario no encontrado o inactivo")
+
+        refresh_token = fernet.decrypt(user.spotify_refresh_token.encode()).decode()
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://accounts.spotify.com/api/token",
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh_token,
+                    "client_id": SPOTIFY_CLIENT_ID,
+                    "client_secret": SPOTIFY_CLIENT_SECRET,
+                },
+            )
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=401, detail="Refresh token inválido o expirado")
+
+        token_data = response.json()
+
+        if "refresh_token" in token_data:
+            nuevo_encrypted = encrypt_refresh_token(fernet, token_data["refresh_token"])
+            await user_service.update_refresh_token(spotify_id, nuevo_encrypted)
+
+        session_token, expires_in = await self.create_session_jwt(spotify_id, SECRET_KEY)
+
+        return {
+            "access_token": session_token,
+            "token_type": "bearer",
+            "expires_in": expires_in,
         }

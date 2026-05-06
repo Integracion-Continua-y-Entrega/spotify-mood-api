@@ -33,9 +33,9 @@ class MongoDB:
             # Configuramos el cliente con un pool de conexiones optimizado
             cls.client = AsyncIOMotorClient(
                 mongo_uri,
-                serverSelectionTimeoutMS=5000,
                 maxPoolSize=10,
-                minPoolSize=1
+                minPoolSize=1,
+                serverSelectionTimeoutMS=10000     # más tiempo para contenedores
             )
             logger.info("🔌 Cliente MongoDB inicializado.")
         return cls.client

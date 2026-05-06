@@ -10,17 +10,10 @@ from dependencies import get_track_service
 router = APIRouter()
 
 @router.get(
-        "/users",
+        "",
         response_description="List all users",
         response_model=UserCollection,
         response_model_by_alias=False
         )
 async def get_users(service: UserService = Depends(get_user_service)):
     return await service.list_users()
-
-@router.post("/users", 
-             response_description="Create a user",
-             response_model=UserModel,
-             response_model_by_alias=False)
-async def create_user(dto: CreateUserDTO, service: UserService = Depends(get_user_service)):
-    return await service.create_user(dto)

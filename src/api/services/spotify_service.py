@@ -93,34 +93,35 @@ async def fetch_spotify_profile(
     logger.info(f"Spotify profile fetched successfully | status={res.status_code}")
     return res.json()
 
-async def fetch_user_top_tracks(
-        client: httpx.AsyncClient,
-        access_token: str):
-    
-    url = "https://api.spotify.com/v1/me/top/tracks?limit=50"
-    logger.info("🎵 Fetching top tracks from Spotify...")
+async def fetch_user_top_tracks(client: httpx.AsyncClient, access_token: str) -> list[dict]:
+    time_ranges = ["short_term", "medium_term", "long_term"]
+    seen_ids = set()
+    all_tracks = []
 
-    try:
-        res = await client.get(
-            url,
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-    except httpx.RequestError as e:
-        logger.error(f"Connection error with Spotify: {e}")
-        raise HTTPException(status_code=500, detail="Error de conexión con Spotify")
+    for time_range in time_ranges:
+        url = f"https://api.spotify.com/v1/me/top/tracks?limit=50&time_range={time_range}"
+        logger.info(f"Fetching top tracks [{time_range}]...")
 
-    logger.info(f"Spotify responded with status: {res.status_code}")
+        try:
+            res = await client.get(url, headers={"Authorization": f"Bearer {access_token}"})
+        except httpx.RequestError as e:
+            logger.error(f"Connection error with Spotify: {e}")
+            raise HTTPException(status_code=500, detail="Error de conexión con Spotify")
 
-    if res.status_code != 200:
-        logger.warning(f"Spotify Auth Error | status={res.status_code} | body={res.text}")
-        raise HTTPException(status_code=400, detail=f"Spotify Auth Error: {res.text}")
+        if res.status_code != 200:
+            logger.warning(f"Spotify Error | status={res.status_code} | body={res.text}")
+            raise HTTPException(status_code=400, detail=f"Spotify Error: {res.text}")
 
-    data = res.json()
-    track_count = len(data.get("items", []))
-    logger.info(f"Successfully fetched {track_count} top tracks")
+        tracks = res.json().get("items", [])
 
-    return data
+        # Deduplicar por spotify id
+        for track in tracks:
+            if track["id"] not in seen_ids:
+                seen_ids.add(track["id"])
+                all_tracks.append(track)
 
+    logger.info(f"Total top tracks únicos: {len(all_tracks)}")
+    return all_tracks
 
 
 def encrypt_refresh_token(fernet: Fernet, refresh_token: str) -> str:

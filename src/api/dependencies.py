@@ -1,3 +1,9 @@
+import os
+import jwt
+
+from jwt.exceptions import InvalidTokenError
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from services.auth_service import AuthService
 from db.connection import get_database, MongoDB
 from services.playlist_service import PlaylistService
@@ -7,6 +13,27 @@ from services.user_service import UserService
 
 db = get_database()
 collections = MongoDB.get_collections()
+
+bearer_scheme = HTTPBearer()
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)
+) -> str:
+    """Valida el JWT y devuelve el spotify_id del usuario."""
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, os.getenv("JWT_SECRET_KEY"), algorithms=["HS256"])
+        spotify_id: str = payload.get("sub")
+        if not spotify_id:
+            raise HTTPException(status_code=401, detail="Token inválido")
+        return spotify_id
+    except InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token expirado o inválido",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
 
 def get_user_service() -> UserService:
     return UserService(collection=collections["users"])
