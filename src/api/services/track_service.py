@@ -1,3 +1,6 @@
+from bson import ObjectId
+from bson.errors import InvalidId
+
 from models.track import Track
 from models.tracks_collection import TrackCollection
 from motor.motor_asyncio import AsyncIOMotorCollection
@@ -34,5 +37,23 @@ class TrackService:
         track.id = str(result.inserted_id)
         return track
     
-    
+    async def find_by_id(self, track_id: str) -> Track | None:
+        try:
+            oid = ObjectId(track_id)
+        except InvalidId:
+            return None
+        doc = await self.tracks.find_one({"_id": oid})
+        return Track.model_validate(doc) if doc else None
+
+    async def find_by_ids(self, track_ids: list[str]) -> TrackCollection:
+        oids = []
+        for tid in track_ids:
+            try:
+                oids.append(ObjectId(tid))
+            except InvalidId:
+                pass 
+        if not oids:
+            return TrackCollection(tracks=[])
+        cursor = self.tracks.find({"_id": {"$in": oids}})
+        return TrackCollection(tracks=await cursor.to_list(len(oids)))
 
