@@ -1,0 +1,51 @@
+name: CI Pipeline - Spotify Mood API
+
+on:
+  push:
+    branches: [ "main", "develop", "feature/*" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test-login:
+    runs-on: ubuntu-latest
+
+    # Levantamos un contenedor real de MongoDB para la prueba
+    services:
+      mongodb:
+        image: mongo:latest
+        ports:
+          - 27017:27017
+
+    steps:
+    - name: Checkout del código
+      uses: actions/checkout@v4
+
+    - name: Configurar Python 3.13
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+
+    - name: Instalar dependencias
+      run: |
+        python -m pip install --upgrade pip
+        # Instalamos los requerimientos de la API y herramientas de test
+        pip install -r spotify-mood-api/src/api/requirements.txt
+        pip install pytest pytest-asyncio httpx
+
+    - name: Ejecutar pruebas de Login
+      env:
+        # Extraemos los valores de los Secrets
+        JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+        TOKEN_ENCRYPTION_KEY: ${{ secrets.TOKEN_ENCRYPTION_KEY }}
+        SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+        SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+        SPOTIFY_REDIRECT_URI: ${{ secrets.SPOTIFY_REDIRECT_URI }}
+        # Apuntamos al servicio de MongoDB interno de GitHub
+        MONGO_URI: "mongodb://localhost:27017"
+        MONGO_DB: "test_db"
+        # Configuramos el PYTHONPATH para encontrar main.py[cite: 1]
+        PYTHONPATH: "spotify-mood-api/src/api"
+      run: |
+        cd spotify-mood-api
+        python -m pytest tests/test_login.py

@@ -1,8 +1,8 @@
 services:
   # Backend (FastAPI)
   backend:
-    build: 
-      context: ./src/api 
+    build:
+      context: ./src/api
       dockerfile: Dockerfile
     container_name: spotify_backend
     ports:
@@ -12,7 +12,7 @@ services:
 
   # Frontend (React/Vite)
   frontend:
-    build: 
+    build:
       context: ./frontend
     container_name: spotify_frontend
     ports:
@@ -32,6 +32,6 @@ services:
   #   volumes:
   #     - ./src/api:/code/app/src/api
   #   restart: "no"
-  
+
 volumes:
   mongo-data:
