@@ -7,10 +7,9 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 
-// --- Tipos ---
 interface AuthUser {
   access_token: string;
-  expires_at: number; // timestamp en ms
+  expires_at: number;
 }
 
 interface AuthContextType {
@@ -21,14 +20,11 @@ interface AuthContextType {
   logout: () => void;
 }
 
-// --- Constantes ---
 const TOKEN_KEY = "auth_token";
 const TOKEN_EXPIRY_KEY = "auth_token_expiry";
 
-// --- Context ---
 const AuthContext = createContext<AuthContextType | null>(null);
 
-// --- Provider ---
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -91,7 +87,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-// --- Hook personalizado ---
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (!context) {
