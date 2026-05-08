@@ -10,7 +10,7 @@ export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
   };
 
   if (!BASE_URL) {
-    console.error("ERROR: VITE_API_URL no está definida en el archivo .env");
+    console.error("ERROR: VITE_BASE_URL no está definida en el archivo .env");
   }
 
   const response = await fetch(`${BASE_URL}${endpoint}`, {
