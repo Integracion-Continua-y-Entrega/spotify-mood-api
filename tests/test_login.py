@@ -1,7 +1,6 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import patch, AsyncMock
-# Importamos la aplicación desde tu archivo principal
 from main import app 
 
 @pytest.mark.asyncio
