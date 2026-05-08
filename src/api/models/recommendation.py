@@ -35,7 +35,7 @@ class SessionContext(BaseModel):
 class Recommendation(BaseModel):
     id:              Optional[PyObjectId] = Field(default=None, alias="_id")
     user_id:         PyObjectId
-    generated_at:    datetime
+    generated_at:    datetime = Field(default_factory=datetime.now)
     query_params:    QueryParams
     tracks:          list[RecommendedTrack] = Field(default_factory=list)
     total_results:   int = Field(ge=0)

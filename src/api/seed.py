@@ -175,7 +175,7 @@ if "playlists" not in collections:
 # Definición de Índices (Optimización de búsqueda)
 db.users.create_index("spotify_id", unique=True)
 db.users.create_index("email", unique=True)
-db.users.create_index("username", unique=True)
+db.users.create_index("display_name", unique=True)
 
 # Índices para algoritmos de recomendación
 # db.tracks.create_index([

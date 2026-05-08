@@ -51,6 +51,6 @@ app.add_middleware(
 # Inclusión de routers con etiquetas
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
-app.include_router(playlists.router, prefix="/api/v1/playlists", tags=["playlists"])
 app.include_router(tracks.router, prefix="/api/v1/tracks", tags=["tracks"])
-app.include_router(recommendations.router, prefix="/api/v1/recommendations", tags=["recommendations"])
+app.include_router(recommendations.router, prefix="/api/v1", tags=["recommendations"])
+# app.include_router(playlists.router, prefix="/api/v1/playlists", tags=["playlists"])

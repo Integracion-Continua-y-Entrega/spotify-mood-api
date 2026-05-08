@@ -7,7 +7,7 @@ from services.playlist_service import PlaylistService
 router = APIRouter()
 
 @router.get(
-        "/playlists",
+        "",
         response_description="List all playlists",
         response_model=PlaylistCollection,
         response_model_by_alias=True

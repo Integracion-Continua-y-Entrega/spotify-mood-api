@@ -1,13 +1,4 @@
 services:
-  # Base de Datos
-  # mongodb:
-  #   image: mongo:latest
-  #   container_name: spotify_db
-  #   ports:
-  #     - "27017:27017"
-  #   volumes:
-  #     - mongo-data:/data/db
-
   # Backend (FastAPI)
   backend:
     build:
@@ -17,12 +8,7 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - ./src/api/.env
-    # depends_on:
-    #   - mongodb
-    environment:
-      - MONGO_URI=${MONGO_URI}
-      - MONGO_DB=spotify_mood_db
+      - ./src/api/.env   
 
   # Frontend (React/Vite)
   frontend:
@@ -33,10 +19,8 @@ services:
       - "5173:5173"
     env_file:
       - ./frontend/.env
-    # depends_on:
-    #   - backend
-    environment:
-      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
 
   # seeder:
   #   build:

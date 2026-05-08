@@ -1,15 +1,16 @@
 from datetime import datetime, timezone
-from venv import logger
 
-from fastapi import Depends, HTTPException
+from fastapi import HTTPException
 
 from analytics.preferences import calculate_user_preferences
 from services.track_service import TrackService
-from models.dtos.create_user_dto import CreateUserDTO
 from models.user import UserModel
 from models.users_collection import UserCollection
 from motor.motor_asyncio import AsyncIOMotorCollection
 
+import logging
+
+logger = logging.Logger(__name__)
 
 class UserService:
     def __init__(self, collection: AsyncIOMotorCollection):
@@ -21,22 +22,47 @@ class UserService:
                 users=await self.users.find().to_list(1000))
         except Exception as e:
             raise Exception(e)
-        
-    async def create_user(self, dto: CreateUserDTO) -> UserModel:
-        try:
-            user = UserModel(
-                username=dto.username,
-                email=dto.email,
-                password_hash=dto.password,
-            )
+                
+    async def count(self) -> int:
+        return await self.users.count_documents({"is_active": True})
 
-            result = await self.users.insert_one(user.model_dump(by_alias=True, exclude_none=True))
-            user.id = result.inserted_id
+    async def find_by_id(self, user_id: str) -> UserModel | None:
+        doc = await self.users.find_one({"_id": user_id})
+        return UserModel.model_validate(doc) if doc else None
 
-            return user
-        except Exception as e:
-            raise Exception(e)
-        
+    async def find_by_spotify_id(self, spotify_id: str) -> UserModel | None:
+        doc = await self.users.find_one({"spotify_id": spotify_id})
+        return UserModel.model_validate(doc) if doc else None
+
+    async def find_by_email(self, email: str) -> UserModel | None:
+        doc = await self.users.find_one({"email": email})
+        return UserModel.model_validate(doc) if doc else None
+    
+    async def clear_preferences(self, spotify_id: str) -> None:
+        result = await self.users.update_one(
+            {"spotify_id": spotify_id},
+            {"$unset": {"preferences": ""}}
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail=f"Usuario {spotify_id} no encontrado")
+    
+    async def deactivate(self, spotify_id: str) -> None:
+        """Soft delete: marca el usuario como inactivo sin eliminarlo."""
+        result = await self.users.update_one(
+            {"spotify_id": spotify_id},
+            {"$set": {"is_active": False}}
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail=f"Usuario {spotify_id} no encontrado")
+
+    async def reactivate(self, spotify_id: str) -> None:
+        result = await self.users.update_one(
+            {"spotify_id": spotify_id},
+            {"$set": {"is_active": True}}
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail=f"Usuario {spotify_id} no encontrado")
+    
     async def upsert_user(
         self,
         spotify_user: dict,
@@ -70,7 +96,7 @@ class UserService:
             raise HTTPException(status_code=500, detail=f"Error de base de datos: {str(e)}")
         
     async def update_user_preferences(self, spotify_id: str, top_raw_tracks: list[dict], track_service: TrackService) -> None:
-        """Actualizar las preferencias musicales del usuario"""        
+        """Actualiza las preferencias musicales del usuario"""        
         try:
             tracks = [await track_service.find_by_spotify_id(t["id"]) for t in top_raw_tracks]
 
@@ -97,3 +123,12 @@ class UserService:
             raise 
         except Exception as e:
             raise RuntimeError(f"Error inesperado al actualizar preferencias: {e}") from e
+    
+    async def update_refresh_token(self, spotify_id: str, encrypted_refresh: str) -> None:
+        """Actualiza el refresh token encriptado del usuario."""
+        result = await self.users.update_one(
+            {"spotify_id": spotify_id},
+            {"$set": {"spotify_refresh_token": encrypted_refresh}}
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail=f"Usuario {spotify_id} no encontrado")
