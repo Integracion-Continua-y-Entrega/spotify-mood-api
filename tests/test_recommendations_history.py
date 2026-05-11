@@ -16,8 +16,7 @@ async def test_get_recommendations_history_success():
     mock_user_data = {"spotify_id": test_spotify_id}
     app.dependency_overrides[get_current_user] = lambda: mock_user_data
 
-    # 2. Simulación de los datos históricos (Lo que devolvería el Service)
-    # 2. Simulación de los datos históricos (Mock 100% compatible)
+    # 2. Simulación de los datos históricos
     mock_history = {
         "recommendations": [
             {
