@@ -14,6 +14,20 @@ class TrackService:
         skip = (page - 1) * limit
         cursor = self.tracks.find().skip(skip).limit(limit)
         return TrackCollection(tracks=await cursor.to_list(limit))
+    
+    async def list_tracks_raw(self, page: int = 1, limit: int = 50) -> list[dict]:
+        skip = (page - 1) * limit
+
+        cursor = self.tracks.find(
+            {}, 
+            {
+                "_id": 1, 
+                "acoustic_features": 1, 
+                "external_ids.spotify_id": 1
+            }
+        ).skip(skip).limit(limit)
+        
+        return await cursor.to_list(limit)
 
     # Obtener total de tracks
     async def count(self) -> int:

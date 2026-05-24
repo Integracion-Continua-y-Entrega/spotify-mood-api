@@ -2,11 +2,15 @@ from math import sqrt
 import pandas as pd
 from models.mood import Mood
 from analytics.mood_profiles import MOOD_TARGETS
+import numpy as np
 
 MOOD_WEIGHT = 0.4
 USER_WEIGHT = 1 - MOOD_WEIGHT
 
-FEATURES = ["energy", "danceability", "valence", "acousticness", "instrumentalness"]
+FEATURES = ["energy", 
+"danceability", "valence", "acousticness", "instrumentalness"]
+
+TOP_K = 10
 
 def _blend_targets(acoustic_profile: dict, mood: Mood) -> dict[str, float]:
     """
@@ -20,16 +24,43 @@ def _blend_targets(acoustic_profile: dict, mood: Mood) -> dict[str, float]:
     }
 
 def get_tracks_recommendations(tracks: list[dict], acoustic_profile: dict, mood: Mood):
-    df = pd.DataFrame(tracks)
+    
+    # 1. Crear un df de numppy vacío
+    matrix = np.empty((len(tracks), len(FEATURES)), dtype=np.float32)
+    ids = []
 
+    for i, track in enumerate(tracks):
+        af = track["acoustic_features"]
+
+        matrix[i] = (
+            af["energy"],
+            af["danceability"],
+            af["valence"],
+            af["acousticness"],
+            af["instrumentalness"],
+        )
+
+        ids.append(str(track["_id"]))
+
+    # 2. Combinar o balancear el peso del perfil acústico del usuario con el del MOOD  
     blended = _blend_targets(acoustic_profile, mood)
 
-    df['distance'] = df.apply(lambda row: sqrt(sum(
-        (blended[f] - row['acoustic_features'][f]) ** 2
-        for f in FEATURES
-    )), axis=1)
+    # Objeto unidimensional a utilizar en el broadcasting
+    features_arr = np.array([blended[f] for f in FEATURES], dtype=np.float32)
 
-    similar_tracks = df.sort_values(by='distance', ascending=True).head(10)
-    similar_tracks['spotify_id'] = similar_tracks['external_ids'].str['spotify_id']
+    # BROADCASTING
+    distances = np.sum((matrix - features_arr) ** 2, axis=1)
 
-    return similar_tracks[['id', 'distance']].reset_index(drop=True)
+    # TOP-K más cercanos
+    top_idx = np.argpartition(distances, TOP_K)[:TOP_K]
+
+    
+    sorted_idx = top_idx[np.argsort(distances[top_idx])]
+
+
+    return [ {
+            "id": ids[i],
+            "distance": float(distances[i]) 
+        }
+        for i in sorted_idx
+    ]
