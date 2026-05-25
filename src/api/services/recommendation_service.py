@@ -43,44 +43,19 @@ class RecommendationService:
     
     async def recommend(self, mood: Mood, spotify_user_id: str, user_service: UserService, track_service: TrackService) :
         try:
-            
-            start = time.perf_counter()
-
-            # Traer los tracks en bruto como lista de dicts
-            raw_tracks = await track_service.list_tracks_raw(limit=500000)
-
-            end = time.perf_counter()
-
-            
-            logger.info("Fetch tracks took %.2fms", (end - start) * 1000)            
+            # Traer los tracks en bruto y con los datos más relevantes como lista de dicts
+            raw_tracks = await track_service.list_tracks_raw(limit=850000)
             
             # Traer el perfil acústico del usuario
             acoustic_profile = (await user_service.find_by_spotify_id(spotify_user_id)).model_dump()["preferences"]["acoustic_profile"] 
 
-            
-            # Obtener las canciones recomendadas 
             # Obtener canciones recomendadas
-
-
-            start = time.perf_counter()
-
 
             results = get_tracks_recommendations(
                 raw_tracks,
                 acoustic_profile,
                 mood
             )
-
-            
-
-            end = time.perf_counter()
-
-            
-            logger.info("Recommendation engine took %.2fms", (end - start) * 1000)            
-                
-            
-            start = time.perf_counter()
-
 
             # Distancia máxima para normalización
             max_dist = max(r["distance"] for r in results) or 1.0
@@ -112,12 +87,6 @@ class RecommendationService:
             recommendation_id = await self.create(recommendation)
 
             recommendation.id = recommendation_id
-
-
-            end = time.perf_counter()
-
-            
-            logger.info("Process reccomendations took %.2fms", (end - start) * 1000)            
     
             return RecommendationCollection(
                 recommendations=[recommendation]

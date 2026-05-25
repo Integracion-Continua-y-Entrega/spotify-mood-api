@@ -5,6 +5,12 @@ from models.track import Track
 from models.tracks_collection import TrackCollection
 from motor.motor_asyncio import AsyncIOMotorCollection
 
+from cache.ttl_cache import TTLCache
+
+_cache_tracks = TTLCache()
+
+CACHE_KEY = "all_tracks"
+
 class TrackService:
     def __init__(self, collection: AsyncIOMotorCollection):
         self.tracks = collection
@@ -15,19 +21,20 @@ class TrackService:
         cursor = self.tracks.find().skip(skip).limit(limit)
         return TrackCollection(tracks=await cursor.to_list(limit))
     
-    async def list_tracks_raw(self, page: int = 1, limit: int = 50) -> list[dict]:
-        skip = (page - 1) * limit
-
-        cursor = self.tracks.find(
-            {}, 
-            {
-                "_id": 1, 
-                "acoustic_features": 1, 
-                "external_ids.spotify_id": 1
-            }
-        ).skip(skip).limit(limit)
-        
-        return await cursor.to_list(limit)
+    async def list_tracks_raw(self, limit: int = 50) -> list[dict]:        
+        return await _cache_tracks.get_or_fetch(
+            key=CACHE_KEY, 
+            fetcher=lambda: self._fetch_raw_tracks(limit))
+    
+    async def _fetch_raw_tracks(self, limit: int):
+        return await self.tracks.find({}, {
+            "_id": 1,
+            "acoustic_features": 1,
+            "external_ids.spotify_id": 1
+        }).to_list(limit)
+    
+    def invalidate_cache_tracks(self):
+        _cache_tracks.invalidate(CACHE_KEY)
 
     # Obtener total de tracks
     async def count(self) -> int:
