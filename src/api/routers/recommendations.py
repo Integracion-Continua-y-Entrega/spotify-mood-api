@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from models.recommendation import Recommendation
 from services.track_service import TrackService
@@ -53,9 +53,11 @@ async def get_my_recommendations(
 )
 async def get_recommendation_by_id(
     recommendation_id: str,
+    tracks_page: int = Query(1, ge=1, description="Recommended tracks page number"),
+    tracks_limit: int = Query(10, ge=10, description="Recommended tracks limit per page"), 
     service: RecommendationService = Depends(get_recommendation_service),
 ):
-    recommendation = await service.find_by_id(recommendation_id)
+    recommendation = await service.find_by_id(recommendation_id, page=tracks_page, limit=tracks_limit)
     if not recommendation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

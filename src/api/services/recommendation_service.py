@@ -25,14 +25,28 @@ class RecommendationService:
         except Exception as e:
             raise Exception(e)
         
-    async def find_by_id(self, recommendation_id: str) -> Recommendation | None:
+    async def find_by_id(
+        self,
+        recommendation_id: str,
+        page: int = 1,
+        limit: int = 10
+    ) -> Recommendation | None:
         try:
             oid = ObjectId(recommendation_id)
         except InvalidId:
             return None
-        doc = await self.recommendations.find_one({"_id": oid})
-        return Recommendation.model_validate(doc) if doc else None
 
+        skip = (page - 1) * limit
+
+        doc = await self.recommendations.find_one(
+            {"_id": oid},
+            {
+                "tracks": {"$slice": [skip, limit]}
+            }
+        )
+
+        return Recommendation.model_validate(doc) if doc else None
+    
     async def find_by_user_id(self, spotify_user_id: str) -> RecommendationCollection:
         cursor = self.recommendations.find(
             {"user_id": spotify_user_id},

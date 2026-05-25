@@ -10,7 +10,7 @@ USER_WEIGHT = 1 - MOOD_WEIGHT
 FEATURES = ["energy", 
 "danceability", "valence", "acousticness", "instrumentalness"]
 
-TOP_K = 10
+TOP_K = 50
 
 def _blend_targets(acoustic_profile: dict, mood: Mood) -> dict[str, float]:
     """
@@ -51,12 +51,11 @@ def get_tracks_recommendations(tracks: list[dict], acoustic_profile: dict, mood:
     # BROADCASTING
     distances = np.sum((matrix - features_arr) ** 2, axis=1)
 
-    # TOP-K más cercanos
-    top_idx = np.argpartition(distances, TOP_K)[:TOP_K]
+    k = min(TOP_K, len(distances))
 
-    
+    top_idx = np.argpartition(distances, k - 1)[:k]
+
     sorted_idx = top_idx[np.argsort(distances[top_idx])]
-
 
     return [ {
             "id": ids[i],
