@@ -3,8 +3,9 @@ import logging
 from typing import Literal
 
 from analytics.recommend import get_tracks_recommendations
+from analytics.time_of_day import get_time_of_day
 from models.mood import Mood
-from models.recommendation import QueryParams, Recommendation, RecommendedTrack, SessionContext
+from models.recommendation import AcousticRangeFilter, QueryParams, Recommendation, RecommendedTrack, SessionContext, TempoRangeFilter
 from models.recommendations_collection import RecommendationCollection
 from services.track_service import TrackService
 from services.user_service import UserService
@@ -72,15 +73,35 @@ class RecommendationService:
         user_service: UserService,
         track_service: TrackService,
     ) -> RecommendationCollection:
+        """
+        Genera una recomendación personalizada basada en el mood del usuario
+        y su perfil acústico, y la persiste en la base de datos-
+
+        Args:
+            mood: Representa el estado de ánimo del usuario al generar las recomendaciones.
+            spotify_user_id: ID del usuario en Spotify.
+            user_service: Servicio requerido para obtener el perfil acústico del usuario.
+            track_service: Servicio requerido para recuperar el catálogo de tracks
+
+        Returns:
+            RecommendationCollection con las canciones recomendadas.
+
+        Raises:
+            InternalError: Si ocurre algún fallo durante el proceso. 
+        """
         try:
+            # Carga el catálogo completo (850k)
             raw_tracks = await track_service.list_tracks_raw(limit=850000)
 
             acoustic_profile = (
                 await user_service.find_by_spotify_id(spotify_user_id)
             ).model_dump()["preferences"]["acoustic_profile"]
 
-            results = get_tracks_recommendations(raw_tracks, acoustic_profile, mood)
+            recommendation_dict = get_tracks_recommendations(raw_tracks, acoustic_profile, mood)
+            results = recommendation_dict["tracks"]
+            query_params_dict = recommendation_dict["query_params"]
 
+            # Si todos los scores son igual a cero, se iguala a 1 para evitar error de división por cero
             max_dist = max(r["distance"] for r in results) or 1.0
 
             recommended_tracks = [
@@ -94,10 +115,30 @@ class RecommendationService:
 
             recommendation = Recommendation(
                 user_id=spotify_user_id,
-                query_params=QueryParams(),
+                query_params=QueryParams(
+                    energy=AcousticRangeFilter(
+                        min=query_params_dict["energy"]["min"],
+                        max=query_params_dict["energy"]["max"],
+                    ),
+                    danceability=AcousticRangeFilter(
+                        min=query_params_dict["danceability"]["min"],
+                        max=query_params_dict["danceability"]["max"],
+                    ),
+                    valence=AcousticRangeFilter(
+                        min=query_params_dict["valence"]["min"],
+                        max=query_params_dict["valence"]["max"],
+                    ),
+                    tempo=TempoRangeFilter(
+                        min=query_params_dict["tempo"]["min"],
+                        max=query_params_dict["tempo"]["max"],
+                    ),
+                ),
                 tracks=recommended_tracks,
                 total_results=len(recommended_tracks),
-                session_context=SessionContext(mood=mood.value),
+                session_context=SessionContext(
+                    mood=mood.value,
+                    time_of_day=get_time_of_day().value
+                ),
             )
 
             recommendation_id = await self.create(recommendation)
