@@ -1,6 +1,7 @@
-from math import sqrt
-from venv import logger
-import pandas as pd
+from logging import Logger
+import logging
+
+from analytics.user_feedback import UserFeedback
 from models.mood import Mood
 from analytics.mood_profiles import MOOD_TARGETS
 import numpy as np
@@ -15,11 +16,29 @@ FEATURES = ["energy",
             "acousticness", 
             "instrumentalness",
             ]
-SAMPLING_TEMPERATURE = 0.5
+SAMPLING_TEMPERATURE = 4
 
 TOP_K = 25 # Total de canciones a devolver por recomendación
 
 CANDIDATE_POOL = 200 # Tamaño de pool para samplear
+
+ELITE_RATIO = 0.2
+
+RECENT_PENALTY = 3
+
+FEEDBACK_PENALIZATION = {
+    UserFeedback.LIKE.value: 0.75,
+    UserFeedback.SKIP.value: 1.15,
+    UserFeedback.DISLIKE.value: 2.0,
+
+}
+
+elite_size = max(
+    3,
+    int(TOP_K * ELITE_RATIO)
+)
+
+logger = logging.getLogger(__name__)
 
 def _blend_targets(acoustic_profile: dict, mood: Mood) -> dict[str, float]:
     """
@@ -32,7 +51,13 @@ def _blend_targets(acoustic_profile: dict, mood: Mood) -> dict[str, float]:
         for feature in FEATURES
     }
 
-def get_tracks_recommendations(tracks: list[dict], acoustic_profile: dict, mood: Mood):
+def get_tracks_recommendations(
+        tracks: list[dict], 
+        acoustic_profile: dict, 
+        mood: Mood,
+        recent_track_ids: list[str],
+        feedback_map: dict,
+    ):
     """
     Obtiene recomendaciones de canciones a través del cálculo de las distancias al cuadrado  
     con una ponderación entre el perfil acústico del usuario y un MOOD
@@ -85,6 +110,24 @@ def get_tracks_recommendations(tracks: list[dict], acoustic_profile: dict, mood:
     # Distancia al cuadrado; el ranking es equivalente a euclidiana y evita la raíz cuadrada
     distances = np.sum((matrix - features_arr) ** 2, axis=1)
 
+    # Penalizaciones
+    for i, track_id in enumerate(ids):
+        
+        # Repetición
+        if track_id in recent_track_ids:
+            distances[i] *= RECENT_PENALTY
+        
+        # feedback
+        if track_id in feedback_map.keys():
+            feedback = feedback_map[track_id]
+            if feedback == UserFeedback.LIKE.value:
+                distances[i] *= FEEDBACK_PENALIZATION[UserFeedback.LIKE.value]
+            elif feedback == UserFeedback.SKIP.value:
+                distances[i] *= FEEDBACK_PENALIZATION[UserFeedback.SKIP.value]
+            elif feedback == UserFeedback.DISLIKE.value:
+                distances[i] *= FEEDBACK_PENALIZATION[UserFeedback.DISLIKE.value]
+
+
     # Implementar sampling
     pool_size = min(CANDIDATE_POOL, len(distances))
 
@@ -93,30 +136,89 @@ def get_tracks_recommendations(tracks: list[dict], acoustic_profile: dict, mood:
         pool_size - 1
     )[:pool_size]
 
-    candidate_distances = distances[candidate_idx]
+    candidate_sorted = candidate_idx[
+        np.argsort(distances[candidate_idx])
+    ]
 
-    scores = 1 / (candidate_distances + 1e-4)
+    # Elite fijo
+    elite_idx = candidate_sorted[:elite_size]
 
-    weights = scores ** (1 / SAMPLING_TEMPERATURE)
+    # Candidatos restantes
+    remaining_candidates = candidate_sorted[elite_size:]
 
-    if np.isinf(weights).any():
-        # Reemplaza los infinitos por el valor máximo representable en float32
-        weights = np.where(np.isinf(weights), np.finfo(np.float32).max, weights)
+    remaining_distances = distances[remaining_candidates]
 
-    probabilities = weights / weights.sum()
-    logger.info(probabilities)
-    logger.info(matrix[candidate_idx])
+    # Softmax invertido
+    scores = np.exp(
+        -remaining_distances / SAMPLING_TEMPERATURE
+    )
 
-    selected_idx = np.random.choice(
-        candidate_idx,
-        size=min(TOP_K, len(candidate_idx)),
+    probabilities = scores / scores.sum()
+
+    sample_size = min(
+        TOP_K - elite_size,
+        len(remaining_candidates)
+    )
+
+    sampled_idx = np.random.choice(
+        remaining_candidates,
+        size=sample_size,
         replace=False,
         p=probabilities
     )
 
-    sorted_idx = selected_idx[np.argsort(distances[selected_idx])]
+    selected = []
 
-    selected_acoustic_features = matrix[selected_idx]
+    remaining = list(sampled_idx)
+
+    while len(selected) < TOP_K - elite_size:
+
+        best_idx = None
+        best_score = -np.inf
+
+        for idx in remaining:
+
+            relevance = -distances[idx]
+
+            diversity_penalty = 0
+
+            similarities = []
+            if selected:
+
+                for s in selected:
+                    sim = np.dot(matrix[idx], matrix[s]) / (
+                        np.linalg.norm(matrix[idx]) * np.linalg.norm(matrix[s])
+                    )
+
+                    similarities.append(sim)
+
+                diversity_penalty = (
+                    0.3 * max(similarities)
+                )
+
+            score = (
+                relevance
+                - diversity_penalty
+            )
+
+            if score > best_score:
+                best_score = score
+                best_idx = idx
+
+        selected.append(best_idx)
+        remaining.remove(best_idx)
+
+    final_idx = np.concatenate([
+        elite_idx,
+        np.array(selected, dtype=np.intp)
+    ])
+
+    # Orden final
+    sorted_idx = final_idx[
+        np.argsort(distances[final_idx])
+    ]
+
+    selected_acoustic_features = matrix[sorted_idx]
 
     min_norm_tempo = np.min(selected_acoustic_features[:, 3])
     max_norm_tempo = np.max(selected_acoustic_features[:, 3])

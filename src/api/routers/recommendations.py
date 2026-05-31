@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from exceptions.exceptions import InvalidIdError, NotFoundError, InternalError
-from models.recommendation import Recommendation
+from models.recommendation import Recommendation, USER_FEEDBACK
 from models.mood import Mood
 from models.recommendations_collection import RecommendationCollection
-from services.recommendation_service import RecommendationService, user_feedback
+from services.recommendation_service import RecommendationService
 from services.track_service import TrackService
 from services.user_service import UserService
 from dependencies import get_current_user, get_recommendation_service, get_track_service, get_user_service
@@ -107,7 +107,7 @@ async def get_recommendation_by_id(
 async def update_recommended_track_feedback(
     recommendation_id: str,
     track_id: str,
-    feedback: user_feedback,
+    feedback: USER_FEEDBACK,
     service: RecommendationService = Depends(get_recommendation_service),
 ):
     try:
