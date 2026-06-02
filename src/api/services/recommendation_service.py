@@ -4,15 +4,12 @@ from services.track_service import TrackService
 from services.user_service import UserService
 from models.mood import Mood
 from models.recommendations_collection import RecommendationCollection
-# 👈 IMPORTANTE: Importa la función que creamos en tu spotify_service
-from services.spotify_service import fetch_preview_urls_map 
-import httpx
 from bson import ObjectId
 from bson.errors import InvalidId
 
 import logging
 
-logger = logging.Logger(__name__, level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class RecommendationService:
     def __init__(self, collection):
@@ -36,7 +33,7 @@ class RecommendationService:
     async def find_by_user_id(self, spotify_user_id: str) -> RecommendationCollection:
         cursor = self.recommendations.find(
             {"user_id": spotify_user_id},
-            sort=[("created_at", -1)],  # más recientes primero
+            sort=[("created_at", -1)],
         )
         return RecommendationCollection(recommendations=await cursor.to_list(100))
 
@@ -45,55 +42,28 @@ class RecommendationService:
         mood: Mood, 
         spotify_user_id: str, 
         user_service: UserService, 
-        track_service: TrackService,
-        http_client: httpx.AsyncClient,  # 👈 AGREGADO
-        access_token: str                # 👈 AGREGADO
-    ):
+        track_service: TrackService
+    ):  # 🧠 CORREGIDO: Firma limpia y desacoplada de llamadas HTTP externas
         try:
-            # 1. Obtener todas las canciones del sistema
+            # 1. Obtener todas las canciones locales
             tracks_collection = await track_service.list_tracks(limit=10000)
             tracks_list = tracks_collection.tracks
-            
-            # Crear un mapa rápido de {str(track._id): objeto_track} para buscar eficientemente después
-            tracks_map = {str(t.id): t for t in tracks_list}
 
             acoustic_profile = (await user_service.find_by_spotify_id(spotify_user_id)).model_dump()["preferences"]["acoustic_profile"]
 
-            # 2. Ejecutar el algoritmo de Machine Learning / Analíticas
+            # 2. Calcular proximidad del algoritmo matemático
             result_df = get_tracks_recommendations([t.model_dump() for t in tracks_list], acoustic_profile, mood)
             max_dist = result_df['distance'].max() or 1
-            
-            # Limitemos el top de recomendaciones a las mejores 20 o 30 para no saturar a Spotify
             top_results = result_df.head(30)
-
-            # 3. Recopilar los spotify_ids únicos de las canciones recomendadas para ir a buscar sus previews
-            spotify_ids_to_enrich = []
-            for _, row in top_results.iterrows():
-                track_obj = tracks_map.get(str(row['id']))
-                if track_obj and track_obj.external_ids.spotify_id:
-                    spotify_ids_to_enrich.append(track_obj.external_ids.spotify_id)
-
-            # 4. Consultar a la API de Spotify los previews en caliente
-            previews_map = await fetch_preview_urls_map(http_client, spotify_ids_to_enrich, access_token)
-
-            # 5. Construir los objetos recomendados acoplando los detalles completos hidratados
-            recommended_tracks = []
-            for rank, (_, row) in enumerate(top_results.iterrows(), start=1):
-                track_id_str = str(row['id'])
-                track_details = tracks_map.get(track_id_str)
-
-                if track_details:
-                    # Inyectamos el preview url en caliente obtenido del mapa de Spotify
-                    track_details.preview_url = previews_map.get(track_details.external_ids.spotify_id)
-
-                recommended_tracks.append(
-                    RecommendedTrack(
-                        track_id=track_id_str,
-                        score=round(1 - (row['distance'] / max_dist), 4),
-                        rank=rank,
-                        track_details=track_details # 👈 AQUÍ SE HIDRATA: Pasamos el objeto Track completo modificado
-                    )
+            
+            recommended_tracks = [
+                RecommendedTrack(
+                    track_id=row['id'],
+                    score=round(1 - (row['distance'] / max_dist), 4),
+                    rank=rank
                 )
+                for rank, (_, row) in enumerate(top_results.iterrows(), start=1)
+            ]
 
             recommendation = Recommendation(
                 user_id=spotify_user_id,
@@ -103,18 +73,17 @@ class RecommendationService:
                 session_context=SessionContext(mood=mood.value)
             )
 
-            # Guardamos la recomendación en Mongo (excluyendo los track_details si quieres mantener tu DB ligera)
             recommendation_id = await self.create(recommendation)
             recommendation.id = recommendation_id
 
             return RecommendationCollection(recommendations=[recommendation])
 
         except Exception as e:
-            logger.error(f"Error en el proceso de recomendación: {e}")
+            logger.error(f"Error en el algoritmo de recomendación: {e}")
             print(e)
 
     async def create(self, recommendation: Recommendation) -> str:
-        # Al guardar en Mongo, excluimos track_details de la persistencia para no duplicar datos pesados
-        doc = recommendation.model_dump(by_alias=True, exclude={"id", "tracks": {"__all__": {"track_details"}}})
+        # El modelo de guardado en la base de datos se mantiene puro y ligero
+        doc = recommendation.model_dump(by_alias=True, exclude={"id"})
         result = await self.recommendations.insert_one(doc)
         return str(result.inserted_id)

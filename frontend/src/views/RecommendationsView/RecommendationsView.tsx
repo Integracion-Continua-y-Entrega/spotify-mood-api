@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMusic } from "../../context/MusicContext";
+import { usePlayback } from "../../context/PlaybackContext";
 import { Track } from "../../types/track";
 import { TrackPlayer } from "../../components/TrackPlayer/TrackPlayer";
 import {
@@ -23,41 +24,19 @@ import {
 
 export const RecommendationsView = () => {
   const [feedback, setFeedback] = useState<Record<string, string>>({});
-  const [activeTrackId, setActiveTrackId] = useState<string | null>(null); // Estado: Track seleccionado
-  const [isPlaying, setIsPlaying] = useState<boolean>(false); // Estado: Play/Pause global
+  const [activeTrackId, setActiveTrackId] = useState<string | null>(null); // Guardamos el ID de la canción activa
 
   const navigate = useNavigate();
   const { recommendations, currentMood, isLoading, error } = useMusic();
-
-  /**
-   * ⚡ EXTRACCIÓN Y APLANADO DE TRACKS (Defensivo)
-   * Transforma la estructura de Recomendaciones hidratada por el Backend
-   * a una lista plana de objetos Track legibles por el componente.
-   */
-  const tracks = useMemo(() => {
-    if (!recommendations || recommendations.length === 0) return [];
-
-    let processedTracks: any[] = [];
-
-    if (Array.isArray(recommendations)) {
-      // Caso A: El contexto guarda directamente la colección sin desestructurar el array [Recommendation]
-      if ((recommendations[0] as any)?.tracks) {
-        processedTracks = (recommendations[0] as any).tracks.map(
-          (item: any) => item.track_details,
-        );
-      } else {
-        // Caso B: El contexto guarda la lista directa de RecommendedTrack
-        processedTracks = recommendations.map(
-          (item: any) => item.track_details || item,
-        );
-      }
-    }
-
-    // Filtramos elementos nulos o tracks que no posean métricas de audio válidas
-    return processedTracks.filter(
-      (t): t is Track => !!t && !!t.acoustic_features,
-    );
-  }, [recommendations]);
+  
+  // ⚡ MEJORA: Consumimos el estado de reproducción real del SDK y sus métodos de control
+  const { 
+    isReady, 
+    isPlaying: sdkIsPlaying, // Renombrado localmente para claridad
+    playTrack, 
+    pauseTrack, 
+    player 
+  } = usePlayback(); 
 
   const formatTime = (ms: number) => {
     const minutes = Math.floor(ms / 60000);
@@ -67,25 +46,29 @@ export const RecommendationsView = () => {
 
   // Encontrar los metadatos completos del track activo para el Player flotante
   const activeTrack = useMemo(() => {
-    return tracks.find((t) => t._id === activeTrackId);
-  }, [tracks, activeTrackId]);
+    return recommendations?.find((t) => t._id === activeTrackId);
+  }, [recommendations, activeTrackId]);
 
   /**
    * 📊 PROCESAMIENTO SEGURO DEL RADAR (TypeScript Safe)
-   * Usa la lista aplanada y limpia para evitar errores de división por cero
-   * u objetos potencialmente 'null/undefined' dentro del reduce.
    */
   const radarData = useMemo(() => {
-    const localTracks = tracks;
+    const localTracks = recommendations;
 
     if (!localTracks || localTracks.length === 0) return [];
 
+    const validTracks = localTracks.filter(
+      (t): t is Track => !!t && !!t.acoustic_features
+    );
+
+    if (validTracks.length === 0) return [];
+
     const avg = (key: keyof Track["acoustic_features"]) => {
-      const sum = localTracks.reduce((acc, t) => {
+      const sum = validTracks.reduce((acc, t) => {
         const val = t.acoustic_features?.[key];
         return acc + (typeof val === "number" ? val : 0);
       }, 0);
-      return sum / localTracks.length;
+      return sum / validTracks.length;
     };
 
     return [
@@ -95,15 +78,35 @@ export const RecommendationsView = () => {
       { subject: "Acústica", A: avg("acousticness") },
       { subject: "Instrumental", A: avg("instrumentalness") },
     ];
-  }, [tracks]);
+  }, [recommendations]);
 
-  // Manejador del click de reproducción por fila
-  const handleTrackPlayToggle = (trackId: string) => {
-    if (activeTrackId === trackId) {
-      setIsPlaying(!isPlaying); // Mismo track: alterna play/pause
-    } else {
-      setActiveTrackId(trackId); // Nuevo track: lo selecciona y activa play
-      setIsPlaying(true);
+  // ⚡ MEJORA CRÍTICA: Ahora el manejador es asíncrono y dispara comandos reales al SDK de Spotify
+  const handleTrackPlayToggle = async (track: Track) => {
+    if (!isReady) return;
+    
+    const trackUri = `spotify:track:${track.external_ids?.spotify_id}`;
+    if (!track.external_ids?.spotify_id) return;
+
+    try {
+      if (activeTrackId === track._id) {
+        // Si presionamos la misma canción que está activa, alternamos su estado nativo
+        if (sdkIsPlaying) {
+          await pauseTrack();
+        } else {
+          // Si el reproductor ya tiene la canción cargada y en pausa, usamos .resume() nativo
+          if (player) {
+            await player.resume();
+          } else {
+            await playTrack(trackUri);
+          }
+        }
+      } else {
+        // Si es una canción nueva, actualizamos el ID activo y enviamos el URI a la API de Spotify
+        setActiveTrackId(track._id);
+        await playTrack(trackUri);
+      }
+    } catch (err) {
+      console.error("Error al controlar la reproducción desde la lista:", err);
     }
   };
 
@@ -183,12 +186,7 @@ export const RecommendationsView = () => {
 
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart
-                  cx="50%"
-                  cy="50%"
-                  outerRadius="80%"
-                  data={radarData}
-                >
+                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
                   <PolarGrid stroke="#3f3f46" />
                   <PolarAngleAxis
                     dataKey="subject"
@@ -223,14 +221,17 @@ export const RecommendationsView = () => {
             <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
               <h3 className="font-bold text-xl">Tu Mix Personalizado</h3>
               <span className="text-zinc-500 text-sm">
-                {tracks.length} canciones
+                {recommendations?.length ?? 0} canciones
               </span>
             </div>
 
             <div className="divide-y divide-zinc-800">
-              {tracks.map((track: Track, index: number) => {
+              {recommendations?.map((track: Track, index: number) => {
                 const isCurrentTrack = activeTrackId === track._id;
-                const isCurrentPlaying = isCurrentTrack && isPlaying;
+                // ⚡ MEJORA: Vinculado al estado real del SDK de Spotify
+                const isCurrentPlaying = isCurrentTrack && sdkIsPlaying; 
+                
+                const hasValidSpotifyId = !!track.external_ids?.spotify_id;
 
                 return (
                   <div
@@ -243,18 +244,19 @@ export const RecommendationsView = () => {
 
                     {/* Botón interactivo de reproducción en la fila */}
                     <button
-                      onClick={() => handleTrackPlayToggle(track._id)}
-                      disabled={!track.preview_url}
-                      className={`relative w-12 h-12 bg-zinc-800 rounded flex items-center justify-center overflow-hidden group/btn border border-transparent transition-colors ${track.preview_url ? "cursor-pointer hover:border-green-500/50" : "cursor-not-allowed opacity-40"}`}
+                      onClick={() => handleTrackPlayToggle(track)} // 👈 Pasamos el objeto Track completo
+                      disabled={!hasValidSpotifyId || !isReady}
+                      className={`relative w-12 h-12 bg-zinc-800 rounded flex items-center justify-center overflow-hidden group/btn border border-transparent transition-colors ${(hasValidSpotifyId && isReady) ? "cursor-pointer hover:border-green-500/50" : "cursor-not-allowed opacity-40"}`}
                       title={
-                        !track.preview_url
-                          ? "Preview no disponible"
-                          : "Reproducir preview"
+                        !hasValidSpotifyId 
+                          ? "ID de catálogo no disponible" 
+                          : !isReady 
+                          ? "Conectando dispositivo de audio..." 
+                          : "Reproducir en Spotify Premium"
                       }
                     >
                       {isCurrentPlaying ? (
                         <>
-                          {/* Ecualizador de barras animadas */}
                           <div className="flex gap-0.5 items-end h-4 z-10 group-hover/btn:opacity-0 transition-opacity">
                             <div className="w-0.5 h-full bg-green-500 animate-[bounce_0.8s_infinite_0.1s]"></div>
                             <div className="w-0.5 h-3 bg-green-500 animate-[bounce_0.8s_infinite_0.3s]"></div>
@@ -318,15 +320,16 @@ export const RecommendationsView = () => {
         </div>
       </div>
 
-      {/* REPRODUCTOR FLOTANTE MAESTRO (Fijo en la esquina inferior derecha) */}
+      {/* ⚡ REPRODUCTOR FLOTANTE MAESTRO ENLAZADO AL SDK */}
       {activeTrack && (
         <div className="fixed bottom-6 right-6 z-50 shadow-2xl transition-all duration-300 transform scale-100 animate-in fade-in slide-in-from-bottom-5">
           <TrackPlayer
-            previewUrl={activeTrack.preview_url}
+            trackUri={`spotify:track:${activeTrack.external_ids?.spotify_id}`}
             title={activeTrack.title}
             artist={activeTrack.artist}
-            isPlaying={isPlaying}
-            onPlayToggle={() => setIsPlaying(!isPlaying)}
+            durationMs={activeTrack.duration_ms}
+            isPlaying={sdkIsPlaying} // 👈 Conectado directamente al SDK global
+            onPlayToggle={() => {}} // 👈 Pasa a ser una función vacía porque el listener de player_state_changed en tu Context actualizará reactivamente a sdkIsPlaying
           />
         </div>
       )}

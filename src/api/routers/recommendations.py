@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-import httpx  # 👈 CORREGIDO: Importación necesaria para el tipado
 
 from models.recommendation import Recommendation
 from services.track_service import TrackService
@@ -10,9 +9,7 @@ from dependencies import (
     get_current_user, 
     get_recommendation_service, 
     get_track_service, 
-    get_user_service,
-    get_httpx_client,
-    get_user_spotify_token
+    get_user_service
 )
 from services.recommendation_service import RecommendationService
 
@@ -27,7 +24,6 @@ router = APIRouter()
 async def get_recommendations(service: RecommendationService = Depends(get_recommendation_service)):
     return await service.list_recommendations()
 
-# 👈 CORREGIDO: Se eliminó el método redundante e incompleto que estaba aquí
 
 @router.post(
         "/users/me/recommendations",
@@ -40,18 +36,15 @@ async def recommend(
                     spotify_user_id: str = Depends(get_current_user), 
                     service: RecommendationService = Depends(get_recommendation_service), 
                     user_service: UserService = Depends(get_user_service), 
-                    track_service: TrackService = Depends(get_track_service),
-                    http_client: httpx.AsyncClient = Depends(get_httpx_client), 
-                    spotify_token: str = Depends(get_user_spotify_token)        
+                    track_service: TrackService = Depends(get_track_service)       
 ):
     return await service.recommend(
         mood=mood, 
         spotify_user_id=spotify_user_id, 
         user_service=user_service, 
-        track_service=track_service,
-        http_client=http_client,
-        access_token=spotify_token
+        track_service=track_service
     )
+
 
 @router.get(
     "/users/me/recommendations",

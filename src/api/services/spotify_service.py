@@ -168,3 +168,52 @@ async def fetch_preview_urls_map(
         logger.error(f"Error de conexión al obtener previews de Spotify: {e}")
 
     return {}
+
+async def get_app_access_token(client: httpx.AsyncClient, client_id: str, client_secret: str) -> str:
+    """Obtiene un token de acceso global de la aplicación (Client Credentials Flow)."""
+    try:
+        res = await client.post(
+            "https://accounts.spotify.com/api/token",
+            data={"grant_type": "client_credentials"},
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Authorization": f"Basic {_spotify_basic_header(client_id, client_secret)}",
+            },
+        )
+        if res.status_code == 200:
+            return res.json().get("access_token", "")
+    except Exception as e:
+        logger.error(f"Error al obtener token de credenciales de cliente: {e}")
+    return ""
+
+async def fetch_preview_urls_map(
+    client: httpx.AsyncClient,
+    spotify_ids: list[str],
+    client_id: str,
+    client_secret: str
+) -> dict[str, str | None]:
+    """Consulta la API externa para armar un mapa de {spotify_id: preview_url}."""
+    if not spotify_ids:
+        return {}
+
+    # Obtener token autónomo de la aplicación
+    access_token = await get_app_access_token(client, client_id, client_secret)
+    if not access_token:
+        return {}
+
+    ids_param = ",".join(spotify_ids[:50])
+    url = f"https://api.spotify.com/v1/tracks?ids={ids_param}"
+
+    try:
+        res = await client.get(
+            url,
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=5.0,
+        )
+        if res.status_code == 200:
+            tracks_data = res.json().get("tracks", [])
+            return {t["id"]: t.get("preview_url") for t in tracks_data if t}
+    except Exception as e:
+        logger.error(f"Error de conexión al mapear vistas de preescucha: {e}")
+        
+    return {}

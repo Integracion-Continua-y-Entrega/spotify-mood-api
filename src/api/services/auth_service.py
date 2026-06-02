@@ -31,10 +31,13 @@ fernet = Fernet(ENCRYPTION_KEY)
 
 class AuthService():
     
+    # 💡 CORREGIDO: Las variables de clase van directas, sin decoradores.
+    with_ui_metadata = True  # Flag de control visual interno
+
     @staticmethod
     async def create_session_jwt(spotify_id: str, secret_key: str) -> tuple[str, int]:
         """
-        Genera el JWT de sesión.
+        Genera el JWT de sesión de la aplicación.
         Retorna (token, expires_in_seconds).
         """
         expires_in = ACCESS_TOKEN_EXPIRE_HOURS * 3600
@@ -59,20 +62,24 @@ class AuthService():
             )
 
             spotify_user = await fetch_spotify_profile(client, tokens["access_token"])
-
             spotify_user_top_tracks = await fetch_user_top_tracks(client, tokens["access_token"])
 
         encrypted_refresh = encrypt_refresh_token(fernet, tokens["refresh_token"])
         session_token, expires_in = await self.create_session_jwt(spotify_user["id"], SECRET_KEY)
 
-        # Setup del usuario
+        # 1. Setup y persistencia base del usuario
         await user_service.upsert_user(spotify_user, encrypted_refresh)
         await user_service.update_user_preferences(spotify_user["id"], spotify_user_top_tracks, track_service)
+
+        # 2. ⚡ MEJORA CRÍTICA: Persistir el token de acceso vivo de Spotify en MongoDB
+        # Esto alimenta a la dependencia get_user_spotify_token usada en /tracks/bulk
+        await user_service.update_spotify_access_token(spotify_user["id"], tokens["access_token"])
 
         return {
             "access_token": session_token,
             "token_type": "bearer",
             "expires_in": expires_in,
+            "spotify_access_token": tokens["access_token"],
             "user": {
                 "name": spotify_user.get("display_name"),
                 "id": spotify_user["id"],
@@ -102,9 +109,13 @@ class AuthService():
 
         token_data = response.json()
 
+        # Si Spotify mandó una rotación de refresh token, la actualizamos cifrada
         if "refresh_token" in token_data:
             nuevo_encrypted = encrypt_refresh_token(fernet, token_data["refresh_token"])
             await user_service.update_refresh_token(spotify_id, nuevo_encrypted)
+
+        if "access_token" in token_data:
+            await user_service.update_spotify_access_token(spotify_id, token_data["access_token"])
 
         session_token, expires_in = await self.create_session_jwt(spotify_id, SECRET_KEY)
 
@@ -112,4 +123,5 @@ class AuthService():
             "access_token": session_token,
             "token_type": "bearer",
             "expires_in": expires_in,
+            "spotify_access_token": token_data["access_token"],
         }

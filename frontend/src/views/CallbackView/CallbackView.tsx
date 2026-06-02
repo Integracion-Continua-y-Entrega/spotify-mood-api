@@ -70,6 +70,9 @@ export const CallbackView = () => {
 
         const data = await response.json();
 
+        // ⚡ NUEVO: Guardar el token genuino de Spotify con una clave única y explícita
+        localStorage.setItem("spotify_access_token", data.spotify_access_token);
+
         login({
           access_token: data.access_token,
           expires_in: data.expires_in,
