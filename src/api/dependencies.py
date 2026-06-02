@@ -1,5 +1,6 @@
 import os
 import jwt
+import httpx 
 
 from jwt.exceptions import InvalidTokenError
 from fastapi import Depends, HTTPException, status
@@ -49,3 +50,42 @@ def get_playlist_service() -> PlaylistService:
 
 def get_auth_service() -> AuthService:
     return AuthService()
+
+
+# =====================================================================
+# ⚡ NUEVAS DEPENDENCIAS PARA ENRIQUECIMIENTO EN TIEMPO REAL
+# =====================================================================
+
+async def get_httpx_client():
+    """Provee una instancia única y asíncrona de httpx para llamadas externas."""
+    async with httpx.AsyncClient() as client:
+        yield client
+
+async def get_user_spotify_token(
+    spotify_user_id: str = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service)
+) -> str:
+    """
+    Dependencia para obtener en caliente el access_token de Spotify 
+    del usuario autenticado directamente desde MongoDB.
+    """
+    user_model = await user_service.find_by_spotify_id(spotify_user_id)
+    if not user_model:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Usuario no encontrado en el sistema"
+        )
+        
+    user_data = user_model.model_dump()
+    
+    # 💡 Nota del Tech Lead: Asegúrate de que "access_token" coincida exactamente
+    # con el nombre de la clave donde persististe el token de Spotify en tu BD.
+    access_token = user_data.get("access_token")
+    
+    if not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="El usuario no cuenta con un token activo de Spotify"
+        )
+        
+    return access_token
