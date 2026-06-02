@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import os
+import logging
 from dotenv import load_dotenv
 from fastapi import HTTPException
 import httpx
@@ -12,6 +13,7 @@ from services.spotify_service import encrypt_refresh_token, exchange_code_for_to
 from services.user_service import UserService
 
 ACCESS_TOKEN_EXPIRE_HOURS = 8
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -57,6 +59,7 @@ class AuthService():
                 client, payload.code, payload.verifier,
                 SPOTIFY_REDIRECT_URI, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET,
             )
+            logger.info("Spotify granted scopes: %s", tokens.get("scope", ""))
 
             spotify_user = await fetch_spotify_profile(client, tokens["access_token"])
 
