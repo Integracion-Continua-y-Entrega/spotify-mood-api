@@ -1,4 +1,5 @@
 # Diseño del Esquema de Base de Datos — MongoDB
+
 **Proyecto:** API de Recomendaciones Musicales  
 **Equipo:** I.C.E  
 **Rol:** Data / Docs — Carlos de Jesús Miranda Becerra  
@@ -13,6 +14,7 @@
 La API genera recomendaciones musicales precisas basadas en **parámetros acústicos** y **preferencias del usuario**, con persistencia de selecciones para experiencia personalizada. Se eligió MongoDB como base de datos NoSQL por su flexibilidad de esquema y escalabilidad horizontal, adecuada para documentos de audio con atributos variables.
 
 ### Principios aplicados
+
 - **Documentos embebidos** para datos que siempre se leen juntos (p. ej., parámetros acústicos dentro de una pista).
 - **Referencias por `_id`** entre colecciones cuando los datos se consultan de forma independiente.
 - **Índices** definidos desde el diseño para soportar las consultas de búsqueda y filtrado del hito 16/04/2026.
@@ -38,34 +40,35 @@ Almacena los perfiles de usuario, sus credenciales y sus preferencias acústicas
     "favorite_genres": ["string"],
     "language": "string",
     "acoustic_profile": {
-      "energy":           { "min": 0.0, "max": 1.0, "target": 0.7 },
-      "danceability":     { "min": 0.0, "max": 1.0, "target": 0.6 },
-      "valence":          { "min": 0.0, "max": 1.0, "target": 0.5 },
-      "acousticness":     { "min": 0.0, "max": 1.0, "target": 0.3 },
+      "energy": { "min": 0.0, "max": 1.0, "target": 0.7 },
+      "danceability": { "min": 0.0, "max": 1.0, "target": 0.6 },
+      "valence": { "min": 0.0, "max": 1.0, "target": 0.5 },
+      "acousticness": { "min": 0.0, "max": 1.0, "target": 0.3 },
       "instrumentalness": { "min": 0.0, "max": 1.0, "target": 0.1 },
-      "tempo_range":      { "min": 60,  "max": 180 }
+      "tempo_range": { "min": 60, "max": 180 }
     }
   },
   "is_active": "boolean"
 }
 ```
 
-| Campo | Tipo | Descripción |
-|-------|------|-------------|
-| `_id` | ObjectId | Identificador único generado por MongoDB |
-| `username` | String | Nombre de usuario, único |
-| `email` | String | Correo electrónico, único |
-| `password_hash` | String | Hash bcrypt de la contraseña |
-| `created_at` | Date | Fecha de registro |
-| `updated_at` | Date | Última actualización del perfil |
-| `preferences.favorite_genres` | Array[String] | Géneros musicales favoritos |
-| `preferences.acoustic_profile` | Object | Rangos y objetivos acústicos del usuario |
-| `is_active` | Boolean | Estado de la cuenta |
+| Campo                          | Tipo          | Descripción                              |
+| ------------------------------ | ------------- | ---------------------------------------- |
+| `_id`                          | ObjectId      | Identificador único generado por MongoDB |
+| `username`                     | String        | Nombre de usuario, único                 |
+| `email`                        | String        | Correo electrónico, único                |
+| `password_hash`                | String        | Hash bcrypt de la contraseña             |
+| `created_at`                   | Date          | Fecha de registro                        |
+| `updated_at`                   | Date          | Última actualización del perfil          |
+| `preferences.favorite_genres`  | Array[String] | Géneros musicales favoritos              |
+| `preferences.acoustic_profile` | Object        | Rangos y objetivos acústicos del usuario |
+| `is_active`                    | Boolean       | Estado de la cuenta                      |
 
 **Índices:**
+
 ```js
-db.users.createIndex({ "email": 1 }, { unique: true })
-db.users.createIndex({ "username": 1 }, { unique: true })
+db.users.createIndex({ email: 1 }, { unique: true });
+db.users.createIndex({ username: 1 }, { unique: true });
 ```
 
 ---
@@ -89,55 +92,56 @@ Almacena la información de cada pista musical junto con sus parámetros acústi
     "isrc": "string"
   },
   "acoustic_features": {
-    "energy":           "float [0.0–1.0]",
-    "danceability":     "float [0.0–1.0]",
-    "valence":          "float [0.0–1.0]",
-    "acousticness":     "float [0.0–1.0]",
+    "energy": "float [0.0–1.0]",
+    "danceability": "float [0.0–1.0]",
+    "valence": "float [0.0–1.0]",
+    "acousticness": "float [0.0–1.0]",
     "instrumentalness": "float [0.0–1.0]",
-    "liveness":         "float [0.0–1.0]",
-    "speechiness":      "float [0.0–1.0]",
-    "loudness":         "float [dB, típico: -60 a 0]",
-    "tempo":            "float [BPM]",
-    "key":              "integer [0–11, notación Pitch Class]",
-    "mode":             "integer [0=menor, 1=mayor]",
-    "time_signature":   "integer [pulsos por compás]"
+    "liveness": "float [0.0–1.0]",
+    "speechiness": "float [0.0–1.0]",
+    "loudness": "float [dB, típico: -60 a 0]",
+    "tempo": "float [BPM]",
+    "key": "integer [0–11, notación Pitch Class]",
+    "mode": "integer [0=menor, 1=mayor]",
+    "time_signature": "integer [pulsos por compás]"
   },
   "added_at": "ISODate"
 }
 ```
 
-| Campo | Tipo | Descripción |
-|-------|------|-------------|
-| `title` | String | Nombre de la canción |
-| `artist` | String | Artista principal |
-| `album` | String | Álbum al que pertenece |
-| `release_year` | Int | Año de lanzamiento |
-| `duration_ms` | Int | Duración en milisegundos |
-| `genre` | Array[String] | Géneros musicales (multivaluado) |
-| `external_ids.spotify_id` | String | ID en Spotify (para ingesta de datos) |
-| `acoustic_features` | Object | Parámetros acústicos normalizados |
-| `acoustic_features.energy` | Float | Intensidad y actividad percibida |
-| `acoustic_features.danceability` | Float | Qué tan bailable es la pista |
-| `acoustic_features.valence` | Float | Positividad musical transmitida |
-| `acoustic_features.tempo` | Float | Velocidad en pulsaciones por minuto |
-| `acoustic_features.key` | Int | Tonalidad (0=Do, 1=Do#, ..., 11=Si) |
-| `acoustic_features.mode` | Int | Modo: 0=menor, 1=mayor |
+| Campo                            | Tipo          | Descripción                           |
+| -------------------------------- | ------------- | ------------------------------------- |
+| `title`                          | String        | Nombre de la canción                  |
+| `artist`                         | String        | Artista principal                     |
+| `album`                          | String        | Álbum al que pertenece                |
+| `release_year`                   | Int           | Año de lanzamiento                    |
+| `duration_ms`                    | Int           | Duración en milisegundos              |
+| `genre`                          | Array[String] | Géneros musicales (multivaluado)      |
+| `external_ids.spotify_id`        | String        | ID en Spotify (para ingesta de datos) |
+| `acoustic_features`              | Object        | Parámetros acústicos normalizados     |
+| `acoustic_features.energy`       | Float         | Intensidad y actividad percibida      |
+| `acoustic_features.danceability` | Float         | Qué tan bailable es la pista          |
+| `acoustic_features.valence`      | Float         | Positividad musical transmitida       |
+| `acoustic_features.tempo`        | Float         | Velocidad en pulsaciones por minuto   |
+| `acoustic_features.key`          | Int           | Tonalidad (0=Do, 1=Do#, ..., 11=Si)   |
+| `acoustic_features.mode`         | Int           | Modo: 0=menor, 1=mayor                |
 
 **Índices:**
+
 ```js
-db.tracks.createIndex({ "acoustic_features.energy": 1 })
-db.tracks.createIndex({ "acoustic_features.danceability": 1 })
-db.tracks.createIndex({ "acoustic_features.valence": 1 })
-db.tracks.createIndex({ "acoustic_features.tempo": 1 })
-db.tracks.createIndex({ "genre": 1 })
-db.tracks.createIndex({ "artist": 1, "title": 1 })
-db.tracks.createIndex({ "external_ids.spotify_id": 1 }, { sparse: true })
+db.tracks.createIndex({ "acoustic_features.energy": 1 });
+db.tracks.createIndex({ "acoustic_features.danceability": 1 });
+db.tracks.createIndex({ "acoustic_features.valence": 1 });
+db.tracks.createIndex({ "acoustic_features.tempo": 1 });
+db.tracks.createIndex({ genre: 1 });
+db.tracks.createIndex({ artist: 1, title: 1 });
+db.tracks.createIndex({ "external_ids.spotify_id": 1 }, { sparse: true });
 // Índice compuesto para filtros acústicos combinados
 db.tracks.createIndex({
   "acoustic_features.energy": 1,
   "acoustic_features.valence": 1,
-  "acoustic_features.danceability": 1
-})
+  "acoustic_features.danceability": 1,
+});
 ```
 
 ---
@@ -152,11 +156,11 @@ Persiste cada sesión de recomendación generada para un usuario, permitiendo hi
   "user_id": "ObjectId (ref: users)",
   "generated_at": "ISODate",
   "query_params": {
-    "energy":           { "min": 0.6, "max": 0.9 },
-    "danceability":     { "min": 0.5, "max": 1.0 },
-    "valence":          { "min": 0.4, "max": 0.8 },
-    "tempo":            { "min": 100, "max": 140 },
-    "genre":            ["pop", "electronic"]
+    "energy": { "min": 0.6, "max": 0.9 },
+    "danceability": { "min": 0.5, "max": 1.0 },
+    "valence": { "min": 0.4, "max": 0.8 },
+    "tempo": { "min": 100, "max": 140 },
+    "genre": ["pop", "electronic"]
   },
   "tracks": [
     {
@@ -176,21 +180,22 @@ Persiste cada sesión de recomendación generada para un usuario, permitiendo hi
 }
 ```
 
-| Campo | Tipo | Descripción |
-|-------|------|-------------|
-| `user_id` | ObjectId | Referencia al usuario que solicitó la recomendación |
-| `generated_at` | Date | Timestamp de generación |
-| `query_params` | Object | Parámetros acústicos usados en la consulta |
-| `tracks` | Array[Object] | Lista ordenada de pistas recomendadas |
-| `tracks[].score` | Float | Puntuación de similitud/relevancia |
-| `tracks[].user_feedback` | String | Retroalimentación del usuario |
-| `session_context.mood` | String | Estado de ánimo indicado (p. ej., "energético") |
-| `session_context.activity` | String | Actividad (p. ej., "entrenamiento", "estudio") |
+| Campo                      | Tipo          | Descripción                                         |
+| -------------------------- | ------------- | --------------------------------------------------- |
+| `user_id`                  | ObjectId      | Referencia al usuario que solicitó la recomendación |
+| `generated_at`             | Date          | Timestamp de generación                             |
+| `query_params`             | Object        | Parámetros acústicos usados en la consulta          |
+| `tracks`                   | Array[Object] | Lista ordenada de pistas recomendadas               |
+| `tracks[].score`           | Float         | Puntuación de similitud/relevancia                  |
+| `tracks[].user_feedback`   | String        | Retroalimentación del usuario                       |
+| `session_context.mood`     | String        | Estado de ánimo indicado (p. ej., "energético")     |
+| `session_context.activity` | String        | Actividad (p. ej., "entrenamiento", "estudio")      |
 
 **Índices:**
+
 ```js
-db.recommendations.createIndex({ "user_id": 1, "generated_at": -1 })
-db.recommendations.createIndex({ "generated_at": -1 })
+db.recommendations.createIndex({ user_id: 1, generated_at: -1 });
+db.recommendations.createIndex({ generated_at: -1 });
 ```
 
 ---
@@ -220,19 +225,20 @@ Almacena playlists creadas o guardadas por el usuario, ya sea generadas por la A
 }
 ```
 
-| Campo | Tipo | Descripción |
-|-------|------|-------------|
-| `user_id` | ObjectId | Propietario de la playlist |
-| `name` | String | Nombre de la playlist |
-| `is_generated` | Boolean | `true` si fue generada automáticamente por la API |
-| `recommendation_id` | ObjectId | Referencia a la recomendación origen (si aplica) |
-| `tracks` | Array[Object] | Pistas con su posición en la playlist |
-| `is_public` | Boolean | Visibilidad de la playlist |
+| Campo               | Tipo          | Descripción                                       |
+| ------------------- | ------------- | ------------------------------------------------- |
+| `user_id`           | ObjectId      | Propietario de la playlist                        |
+| `name`              | String        | Nombre de la playlist                             |
+| `is_generated`      | Boolean       | `true` si fue generada automáticamente por la API |
+| `recommendation_id` | ObjectId      | Referencia a la recomendación origen (si aplica)  |
+| `tracks`            | Array[Object] | Pistas con su posición en la playlist             |
+| `is_public`         | Boolean       | Visibilidad de la playlist                        |
 
 **Índices:**
+
 ```js
-db.playlists.createIndex({ "user_id": 1, "created_at": -1 })
-db.playlists.createIndex({ "is_public": 1 })
+db.playlists.createIndex({ user_id: 1, created_at: -1 });
+db.playlists.createIndex({ is_public: 1 });
 ```
 
 ---
@@ -275,7 +281,7 @@ MONGO_USERNAME     → Usuario de base de datos
 MONGO_PASSWORD     → Contraseña de base de datos
 ```
 
-### 5.1  Uso en el pipeline CI/CD (`.github/workflows/ci.yml`)
+### 5.1 Uso en el pipeline CI/CD (`.github/workflows/ci.yml`)
 
 ```yaml
 env:
@@ -327,15 +333,15 @@ def get_collections(db):
 
 ## 7. Consideraciones para Hitos Futuros
 
-| Hito | Fecha | Impacto en el esquema |
-|------|-------|-----------------------|
-| Primer prototipo funcional | 08/04/2026 | Endpoints CRUD sobre `users` y `tracks` |
-| Lógica de búsqueda y filtrado | 16/04/2026 | Queries sobre `acoustic_features` usando los índices compuestos definidos en §2.2 |
-| Pruebas unitarias e integrales | 22/04/2026 | Fixtures de MongoDB con datos de prueba; el maestro indica adelantar estas pruebas al pipeline CI/CD |
-| API v1.0 + Documentación Técnica | 30/04/2026 | Documentación de endpoints y esquemas en formato OpenAPI |
+| Hito                             | Fecha      | Impacto en el esquema                                                                                |
+| -------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------- |
+| Primer prototipo funcional       | 08/04/2026 | Endpoints CRUD sobre `users` y `tracks`                                                              |
+| Lógica de búsqueda y filtrado    | 16/04/2026 | Queries sobre `acoustic_features` usando los índices compuestos definidos en §2.2                    |
+| Pruebas unitarias e integrales   | 22/04/2026 | Fixtures de MongoDB con datos de prueba; el maestro indica adelantar estas pruebas al pipeline CI/CD |
+| API v1.0 + Documentación Técnica | 30/04/2026 | Documentación de endpoints y esquemas en formato OpenAPI                                             |
 
 > **Nota sobre pruebas (observación del maestro):** Se recomienda agregar una base de datos de prueba separada (`music_recommendations_test`) gestionada por GitHub Actions, con secretos propios, para que cada push valide automáticamente la lógica de búsqueda y filtrado sin afectar datos de producción.
 
 ---
 
-*Documento para el Release R1 — Equipo I.C.E*
+_Documento para el Release R1 — Equipo I.C.E_

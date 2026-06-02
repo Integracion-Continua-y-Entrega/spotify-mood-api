@@ -84,3 +84,6 @@ dist-ssr
 .venv
 env
 .env
+
+# Repo anterior
+spotify-mood-api/

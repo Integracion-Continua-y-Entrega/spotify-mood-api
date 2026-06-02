@@ -6,7 +6,11 @@ export interface SpotifyAuthConfig {
   scopes?: string[];
 }
 
-const DEFAULT_SCOPES = ["user-read-private", "user-read-email", "user-top-read"];
+const DEFAULT_SCOPES = [
+  "user-read-private",
+  "user-read-email",
+  "user-top-read",
+];
 const PKCE_VERIFIER_KEY = "spotify_pkce_verifier";
 const PKCE_STATE_KEY = "spotify_pkce_state";
 
