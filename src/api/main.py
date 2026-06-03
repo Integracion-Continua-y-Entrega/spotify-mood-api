@@ -67,5 +67,5 @@ async def _warm_cache():
         await track_service.list_tracks_raw()
     except Exception as e:
         logging.warning("Warm-up de caché falló: %s", e)
-        
+
 # app.include_router(playlists.router, prefix="/api/v1/playlists", tags=["playlists"])
