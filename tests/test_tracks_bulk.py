@@ -2,7 +2,7 @@ import pytest
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import patch, AsyncMock
 from main import app
-from dependencies import get_current_user  # ⚡ NUEVO: Importamos la dependencia para el bypass
+from dependencies import get_current_user, get_user_spotify_token  # ⚡ NUEVO: Importamos la dependencia para el bypass
 
 @pytest.mark.asyncio
 async def test_get_tracks_bulk_success():
@@ -13,6 +13,7 @@ async def test_get_tracks_bulk_success():
     # 1. ⚡ NUEVO: Bypass de autenticación para evitar el 403 Forbidden
     test_spotify_id = "qa_user_123"
     app.dependency_overrides[get_current_user] = lambda: test_spotify_id
+    app.dependency_overrides[get_user_spotify_token] = lambda: "mock_spotify_token"  # 👈 agregar
 
     track_ids = ["65f1a2b3c4d5e6f7a8b9c0d1", "65f1a2b3c4d5e6f7a8b9c0d2"]
     payload = {"ids": track_ids}

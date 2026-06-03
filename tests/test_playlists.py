@@ -74,7 +74,9 @@ async def test_create_user_playlist_success():
         "is_generated": True,
         "recommendation_id": None,
         "tracks": [],
-        "is_public": False
+        "is_public": False,
+        "created_at": "2026-05-27T10:00:00Z",
+        "updated_at": "2026-05-27T10:00:00Z",
     }
 
     # ⚡ CORREGIDO: El parche ahora apunta al nombre de método correcto 'create_spotify_playlist'
