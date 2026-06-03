@@ -10,9 +10,11 @@ const DEFAULT_SCOPES = [
   "user-read-private",
   "user-read-email",
   "user-top-read",
-  "streaming",                      // ⚡ IMPRESCINDIBLE: Permite al SDK abrir WebSockets y simular un reproductor
-  "user-modify-playback-state",     // ⚡ IMPRESCINDIBLE: Permite a tu función playTrack (fetch PUT) cambiar la música
-  "user-read-playback-state"        // ⚡ RECOMENDADO: Permite capturar eventos cuando la música cambie o se pause
+  "streaming", // ⚡ IMPRESCINDIBLE: Permite al SDK abrir WebSockets y simular un reproductor
+  "user-modify-playback-state", // ⚡ IMPRESCINDIBLE: Permite a tu función playTrack (fetch PUT) cambiar la música
+  "user-read-playback-state", // ⚡ RECOMENDADO: Permite capturar eventos cuando la música cambie o se pause
+  "playlist-modify-private",
+  "playlist-modify-public",
 ];
 
 const PKCE_VERIFIER_KEY = "spotify_pkce_verifier";
@@ -52,7 +54,7 @@ export async function redirectToAuthCodeFlow(
     code_challenge_method: "S256",
     code_challenge: challenge,
     state,
-    show_dialog: "false",
+    show_dialog: "true",
   });
 
   window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;

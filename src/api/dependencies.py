@@ -50,7 +50,11 @@ def get_recommendation_service() -> RecommendationService:
     return RecommendationService(collection=collections["recommendations"])
 
 def get_playlist_service() -> PlaylistService:
-    return PlaylistService(collection=collections["playlists"])
+    return PlaylistService(
+        collection=collections["playlists"],
+        users_collection=collections["users"],
+        tracks_collection=collections["tracks"],
+    )
 
 def get_auth_service() -> AuthService:
     return AuthService()

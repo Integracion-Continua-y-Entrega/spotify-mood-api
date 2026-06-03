@@ -1,5 +1,8 @@
 from datetime import datetime, timedelta, timezone
+import logging
 import os
+import logging
+import time
 from dotenv import load_dotenv
 from fastapi import HTTPException
 import httpx
@@ -12,6 +15,7 @@ from services.spotify_service import encrypt_refresh_token, exchange_code_for_to
 from services.user_service import UserService
 
 ACCESS_TOKEN_EXPIRE_HOURS = 8
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -28,6 +32,8 @@ SPOTIFY_REDIRECT_URI  = _require_env("SPOTIFY_REDIRECT_URI")
 ENCRYPTION_KEY        = _require_env("TOKEN_ENCRYPTION_KEY")
 
 fernet = Fernet(ENCRYPTION_KEY)
+
+logger = logging.getLogger(__name__)
 
 class AuthService():
     
@@ -60,6 +66,7 @@ class AuthService():
                 client, payload.code, payload.verifier,
                 SPOTIFY_REDIRECT_URI, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET,
             )
+            logger.info("Spotify granted scopes: %s", tokens.get("scope", ""))
 
             spotify_user = await fetch_spotify_profile(client, tokens["access_token"])
             spotify_user_top_tracks = await fetch_user_top_tracks(client, tokens["access_token"])
@@ -69,7 +76,7 @@ class AuthService():
 
         # 1. Setup y persistencia base del usuario
         await user_service.upsert_user(spotify_user, encrypted_refresh)
-        await user_service.update_user_preferences(spotify_user["id"], spotify_user_top_tracks, track_service)
+        await user_service.update_user_preferences(spotify_user["id"], spotify_user_top_tracks, track_service) 
 
         # 2. ⚡ MEJORA CRÍTICA: Persistir el token de acceso vivo de Spotify en MongoDB
         # Esto alimenta a la dependencia get_user_spotify_token usada en /tracks/bulk
