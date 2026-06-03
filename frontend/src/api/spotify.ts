@@ -10,6 +10,8 @@ const DEFAULT_SCOPES = [
   "user-read-private",
   "user-read-email",
   "user-top-read",
+  "playlist-modify-private",
+  "playlist-modify-public",
 ];
 const PKCE_VERIFIER_KEY = "spotify_pkce_verifier";
 const PKCE_STATE_KEY = "spotify_pkce_state";
@@ -48,7 +50,7 @@ export async function redirectToAuthCodeFlow(
     code_challenge_method: "S256",
     code_challenge: challenge,
     state,
-    show_dialog: "false",
+    show_dialog: "true",
   });
 
   window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;

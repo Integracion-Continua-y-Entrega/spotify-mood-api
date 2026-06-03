@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from db.connection import get_database, MongoDB
-from routers import recommendations, tracks, users, auth
+from routers import playlists, recommendations, tracks, users, auth
 import logging
 from asyncio import create_task
 from dependencies import get_track_service
@@ -49,7 +49,12 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173", "http://0.0.0.0:5173"],
+    allow_origins=[
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+        "http://0.0.0.0:5173",
+        "https://spotify-mood-api-1.onrender.com",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -60,6 +65,7 @@ app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(tracks.router, prefix="/api/v1/tracks", tags=["tracks"])
 app.include_router(recommendations.router, prefix="/api/v1", tags=["recommendations"])
+app.include_router(playlists.router, prefix="/api/v1", tags=["playlists"])
 
 async def _warm_cache():
     try:
@@ -68,4 +74,3 @@ async def _warm_cache():
     except Exception as e:
         logging.warning("Warm-up de caché falló: %s", e)
 
-# app.include_router(playlists.router, prefix="/api/v1/playlists", tags=["playlists"])

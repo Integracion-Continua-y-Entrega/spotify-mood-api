@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, Body
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
 from models.dtos.create_user_dto import CreateUserDTO
 from models.user import UserModel
 from models.users_collection import UserCollection
@@ -9,6 +10,40 @@ from services.playlist_service import PlaylistService
 from dependencies import get_current_user, get_user_service, get_playlist_service
 
 router = APIRouter()
+
+
+class CreatePlaylistRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    track_ids: list[str] = Field(
+        ...,
+        min_length=10,
+        max_length=10,
+        description="IDs de MongoDB de las canciones recomendadas",
+    )
+    description: str = Field(default="", max_length=500)
+    public: bool = False
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "name": "Happy Mood",
+                "description": "Playlist generada desde recomendaciones Happy",
+                "public": False,
+                "track_ids": [
+                    "69f89955736605d266657297",
+                    "69f8994f736605d266655a24",
+                    "69f8994f736605d26665607e",
+                    "69f89955736605d266657c95",
+                    "69f89955736605d2666573fc",
+                    "69f8994f736605d266655f34",
+                    "69f89955736605d26665745c",
+                    "69f89955736605d266657328",
+                    "69f89955736605d266657510",
+                    "69f8994f736605d266656c7d",
+                ],
+            }
+        }
+    }
 
 @router.get(
     "",
@@ -50,22 +85,20 @@ async def get_my_playlists(
 
 @router.post(
     "/me/playlists",
-    response_description="Create a new playlist in the user's Spotify account",
+    response_description="Create a new playlist with recommended tracks",
     response_model=Playlist,
     status_code=201,
 )
 async def create_my_playlist(
-    name: str = Body(..., embed=True),
-    description: str = Body("", embed=True),
-    public: bool = Body(False, embed=True),
-    access_token: str = Body(..., embed=True, description="Spotify access token del usuario"),
+    body: CreatePlaylistRequest,
     playlist_service: PlaylistService = Depends(get_playlist_service),
     user_id: str = Depends(get_current_user),
 ):
+    """Crea una playlist en Spotify con las canciones recomendadas y la persiste en MongoDB."""
     return await playlist_service.create_spotify_playlist(
         spotify_id=user_id,
-        access_token=access_token,
-        name=name,
-        description=description,
-        public=public,
+        name=body.name,
+        track_ids=body.track_ids,
+        description=body.description,
+        public=body.public,
     )
