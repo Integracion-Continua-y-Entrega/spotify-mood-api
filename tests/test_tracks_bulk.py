@@ -1,8 +1,10 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
-from unittest.mock import patch, AsyncMock
 from main import app
-from dependencies import get_current_user, get_user_spotify_token  # ⚡ NUEVO: Importamos la dependencia para el bypass
+from dependencies import get_current_user, get_user_spotify_token, get_httpx_client
+from unittest.mock import patch, AsyncMock, MagicMock
+from models.tracks_collection import TrackCollection
+from models.track import Track
 
 @pytest.mark.asyncio
 async def test_get_tracks_bulk_success():
@@ -12,8 +14,20 @@ async def test_get_tracks_bulk_success():
     """
     # 1. ⚡ NUEVO: Bypass de autenticación para evitar el 403 Forbidden
     test_spotify_id = "qa_user_123"
+    # Mock del cliente HTTP para evitar llamadas reales a Spotify
+    mock_http_client = MagicMock()
+    mock_http_response = MagicMock()
+    mock_http_response.status_code = 200
+    mock_http_response.json.return_value = {
+        "tracks": [
+            {"id": "4uLU61CZoI0pX3iZp9p93q", "preview_url": "https://example.com/preview1.mp3"},
+            {"id": "1rgnp9vFCp9p93qZpI0pX3", "preview_url": "https://example.com/preview2.mp3"},
+        ]
+    }
+    mock_http_client.get = AsyncMock(return_value=mock_http_response)
     app.dependency_overrides[get_current_user] = lambda: test_spotify_id
-    app.dependency_overrides[get_user_spotify_token] = lambda: "mock_spotify_token"  # 👈 agregar
+    app.dependency_overrides[get_user_spotify_token] = lambda: "mock_spotify_token"
+    app.dependency_overrides[get_httpx_client] = lambda: mock_http_client
 
     track_ids = ["65f1a2b3c4d5e6f7a8b9c0d1", "65f1a2b3c4d5e6f7a8b9c0d2"]
     payload = {"ids": track_ids}
@@ -47,14 +61,14 @@ async def test_get_tracks_bulk_success():
             "duration_ms": 185000
         }
     ]
-    
-    mock_response_data = {"tracks": mock_tracks_list}
 
     # 2. ⚡ CORREGIDO: Agregamos el parche de 'main._warm_cache' para evitar 'Event loop is closed'
     with patch("main._warm_cache", new_callable=AsyncMock), \
          patch("services.track_service.TrackService.find_by_ids", new_callable=AsyncMock) as mock_bulk:
         
-        mock_bulk.return_value = mock_response_data
+        mock_bulk.return_value = TrackCollection(
+            tracks=[Track.model_validate(t) for t in mock_tracks_list]
+        )
 
         async with app.router.lifespan_context(app):
             transport = ASGITransport(app=app)
