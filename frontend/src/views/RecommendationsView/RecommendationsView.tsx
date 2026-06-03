@@ -4,6 +4,7 @@ import { useMusic } from "../../context/MusicContext";
 import { usePlayback } from "../../context/PlaybackContext";
 import { Track } from "../../types/track";
 import { TrackPlayer } from "../../components/TrackPlayer/TrackPlayer";
+import { ExportPlaylistModal } from "../../components/ExportPlaylistModal/ExportPlaylistModal";
 import {
   Radar,
   RadarChart,
@@ -24,19 +25,24 @@ import {
 
 export const RecommendationsView = () => {
   const [feedback, setFeedback] = useState<Record<string, string>>({});
-  const [activeTrackId, setActiveTrackId] = useState<string | null>(null); // Guardamos el ID de la canción activa
+  const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
+
+  // ⚡ NUEVO: Estado para controlar los IDs de las canciones seleccionadas para la playlist
+  const [selectedTrackIds, setSelectedTrackIds] = useState<string[]>([]);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   const navigate = useNavigate();
-  const { recommendations, currentMood, isLoading, error } = useMusic();
-  
-  // ⚡ MEJORA: Consumimos el estado de reproducción real del SDK y sus métodos de control
-  const { 
-    isReady, 
-    isPlaying: sdkIsPlaying, // Renombrado localmente para claridad
-    playTrack, 
-    pauseTrack, 
-    player 
-  } = usePlayback(); 
+
+  const { recommendations, currentMood, isLoading, error, saveTrackFeedback } =
+    useMusic();
+
+  const {
+    isReady,
+    isPlaying: sdkIsPlaying,
+    playTrack,
+    pauseTrack,
+    player,
+  } = usePlayback();
 
   const formatTime = (ms: number) => {
     const minutes = Math.floor(ms / 60000);
@@ -49,6 +55,27 @@ export const RecommendationsView = () => {
     return recommendations?.find((t) => t._id === activeTrackId);
   }, [recommendations, activeTrackId]);
 
+  // ⚡ NUEVO: Memoriza y filtra únicamente los tracks que el usuario seleccionó para exportar
+  const selectedTracks = useMemo(() => {
+    return (
+      recommendations?.filter((t) => selectedTrackIds.includes(t._id)) ?? []
+    );
+  }, [recommendations, selectedTrackIds]);
+
+  /**
+   * ⚡ NUEVO: Controlador para añadir o remover canciones del set de exportación
+   * Pone un tope estricto en 10 elementos para coincidir con las reglas de Pydantic
+   */
+  const toggleTrackSelection = (trackId: string) => {
+    setSelectedTrackIds((prev) => {
+      if (prev.includes(trackId)) {
+        return prev.filter((id) => id !== trackId);
+      }
+      if (prev.length >= 10) return prev; // Bloquea la selección si ya hay 10
+      return [...prev, trackId];
+    });
+  };
+
   /**
    * 📊 PROCESAMIENTO SEGURO DEL RADAR (TypeScript Safe)
    */
@@ -58,7 +85,7 @@ export const RecommendationsView = () => {
     if (!localTracks || localTracks.length === 0) return [];
 
     const validTracks = localTracks.filter(
-      (t): t is Track => !!t && !!t.acoustic_features
+      (t): t is Track => !!t && !!t.acoustic_features,
     );
 
     if (validTracks.length === 0) return [];
@@ -80,20 +107,18 @@ export const RecommendationsView = () => {
     ];
   }, [recommendations]);
 
-  // ⚡ MEJORA CRÍTICA: Ahora el manejador es asíncrono y dispara comandos reales al SDK de Spotify
+  // Manejador asíncrono que dispara comandos reales al SDK de Spotify
   const handleTrackPlayToggle = async (track: Track) => {
     if (!isReady) return;
-    
+
     const trackUri = `spotify:track:${track.external_ids?.spotify_id}`;
     if (!track.external_ids?.spotify_id) return;
 
     try {
       if (activeTrackId === track._id) {
-        // Si presionamos la misma canción que está activa, alternamos su estado nativo
         if (sdkIsPlaying) {
           await pauseTrack();
         } else {
-          // Si el reproductor ya tiene la canción cargada y en pausa, usamos .resume() nativo
           if (player) {
             await player.resume();
           } else {
@@ -101,7 +126,6 @@ export const RecommendationsView = () => {
           }
         }
       } else {
-        // Si es una canción nueva, actualizamos el ID activo y enviamos el URI a la API de Spotify
         setActiveTrackId(track._id);
         await playTrack(trackUri);
       }
@@ -110,11 +134,16 @@ export const RecommendationsView = () => {
     }
   };
 
-  const handleFeedback = (
+  const handleFeedback = async (
     trackId: string,
     type: "like" | "dislike" | "skip",
   ) => {
     setFeedback((prev) => ({ ...prev, [trackId]: type }));
+    try {
+      await saveTrackFeedback(trackId, type);
+    } catch (err) {
+      console.error("Error al guardar la interacción del usuario:", err);
+    }
   };
 
   if (isLoading) {
@@ -186,7 +215,12 @@ export const RecommendationsView = () => {
 
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
+                <RadarChart
+                  cx="50%"
+                  cy="50%"
+                  outerRadius="80%"
+                  data={radarData}
+                >
                   <PolarGrid stroke="#3f3f46" />
                   <PolarAngleAxis
                     dataKey="subject"
@@ -218,41 +252,79 @@ export const RecommendationsView = () => {
 
         <div className="lg:col-span-2">
           <div className="bg-zinc-900/30 rounded-3xl border border-zinc-800 overflow-hidden">
-            <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
-              <h3 className="font-bold text-xl">Tu Mix Personalizado</h3>
-              <span className="text-zinc-500 text-sm">
-                {recommendations?.length ?? 0} canciones
-              </span>
+            {/* Cabecera de la tabla con contador e indicador dinámico */}
+            <div className="p-6 border-b border-zinc-800 flex justify-between items-center gap-4 flex-wrap">
+              <div>
+                <h3 className="font-bold text-xl">Tu Mix Personalizado</h3>
+                <p className="text-zinc-500 text-sm mt-1">
+                  Selecciona{" "}
+                  <span className="text-green-500 font-bold">
+                    exactamente 10 canciones
+                  </span>{" "}
+                  para exportar
+                </p>
+              </div>
+
+              {/* ⚡ MODIFICADO: El botón solo se habilita si hay exactamente 10 seleccionadas */}
+              <button
+                onClick={() => setIsExportModalOpen(true)}
+                disabled={selectedTrackIds.length !== 10}
+                className="bg-green-600 hover:bg-green-500 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold px-5 py-2.5 rounded-full transition-all shadow-lg flex items-center gap-2"
+              >
+                <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                  <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.565.387-.86.207-2.377-1.454-5.37-1.783-8.893-.982-.336.075-.668-.135-.744-.47-.075-.336.135-.668.47-.743 3.856-.88 7.15-.505 9.822 1.13.295.178.387.563.205.858zm1.225-2.72c-.227.367-.707.487-1.074.26-2.72-1.672-6.87-2.157-10.082-1.182-.413.125-.847-.107-.972-.52-.125-.413.108-.847.52-.972 3.673-1.114 8.235-.574 11.347 1.34.37.226.49.707.26 1.074zm.105-2.822c-3.26-1.936-8.65-2.115-11.782-1.164-.5.15-1.023-.13-1.174-.633-.15-.5.13-1.023.633-1.174 3.634-1.103 9.57-.893 13.327 1.336.45.267.6.845.334 1.295-.267.45-.845.6-1.295.334z" />
+                </svg>
+                Exportar ({selectedTrackIds.length}/10)
+              </button>
             </div>
 
             <div className="divide-y divide-zinc-800">
               {recommendations?.map((track: Track, index: number) => {
                 const isCurrentTrack = activeTrackId === track._id;
-                // ⚡ MEJORA: Vinculado al estado real del SDK de Spotify
-                const isCurrentPlaying = isCurrentTrack && sdkIsPlaying; 
-                
+                const isCurrentPlaying = isCurrentTrack && sdkIsPlaying;
                 const hasValidSpotifyId = !!track.external_ids?.spotify_id;
+
+                // Estados de selección por fila
+                const isSelected = selectedTrackIds.includes(track._id);
+                const isSelectionDisabled =
+                  !isSelected && selectedTrackIds.length >= 10;
 
                 return (
                   <div
                     key={track._id}
-                    className="p-4 flex items-center gap-4 hover:bg-white/5 transition-colors group"
+                    className={`p-4 flex items-center gap-4 transition-colors group ${isSelected ? "bg-green-500/5 hover:bg-green-500/10" : "hover:bg-white/5"}`}
                   >
-                    <span className="text-zinc-600 font-mono w-4">
+                    {/* ⚡ NUEVO: Checkbox interactivo de control */}
+                    <div className="flex items-center justify-center pl-1">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        disabled={isSelectionDisabled}
+                        onChange={() => toggleTrackSelection(track._id)}
+                        className="w-4 h-4 accent-green-500 cursor-pointer rounded bg-zinc-800 border-zinc-700 disabled:opacity-20 disabled:cursor-not-allowed"
+                        title={
+                          isSelectionDisabled
+                            ? "Llegaste al límite de 10 canciones"
+                            : "Seleccionar para la playlist"
+                        }
+                      />
+                    </div>
+
+                    <span className="text-zinc-600 font-mono w-4 text-center text-xs">
                       {index + 1}
                     </span>
 
                     {/* Botón interactivo de reproducción en la fila */}
                     <button
-                      onClick={() => handleTrackPlayToggle(track)} // 👈 Pasamos el objeto Track completo
+                      onClick={() => handleTrackPlayToggle(track)}
                       disabled={!hasValidSpotifyId || !isReady}
-                      className={`relative w-12 h-12 bg-zinc-800 rounded flex items-center justify-center overflow-hidden group/btn border border-transparent transition-colors ${(hasValidSpotifyId && isReady) ? "cursor-pointer hover:border-green-500/50" : "cursor-not-allowed opacity-40"}`}
+                      className={`relative w-12 h-12 bg-zinc-800 rounded flex items-center justify-center overflow-hidden group/btn border border-transparent transition-colors ${hasValidSpotifyId && isReady ? "cursor-pointer hover:border-green-500/50" : "cursor-not-allowed opacity-40"}`}
                       title={
-                        !hasValidSpotifyId 
-                          ? "ID de catálogo no disponible" 
-                          : !isReady 
-                          ? "Conectando dispositivo de audio..." 
-                          : "Reproducir en Spotify Premium"
+                        !hasValidSpotifyId
+                          ? "ID de catálogo no disponible"
+                          : !isReady
+                            ? "Conectando dispositivo de audio..."
+                            : "Reproducir en Spotify Premium"
                       }
                     >
                       {isCurrentPlaying ? (
@@ -276,7 +348,7 @@ export const RecommendationsView = () => {
 
                     <div className="flex-1 min-w-0">
                       <h4
-                        className={`font-semibold truncate transition-colors ${isCurrentTrack ? "text-green-500" : "text-white"}`}
+                        className={`font-semibold truncate transition-colors ${isCurrentTrack ? "text-green-500 font-bold" : "text-white"}`}
                       >
                         {track.title}
                       </h4>
@@ -320,7 +392,7 @@ export const RecommendationsView = () => {
         </div>
       </div>
 
-      {/* ⚡ REPRODUCTOR FLOTANTE MAESTRO ENLAZADO AL SDK */}
+      {/* REPRODUCTOR FLOTANTE MAESTRO ENLAZADO AL SDK */}
       {activeTrack && (
         <div className="fixed bottom-6 right-6 z-50 shadow-2xl transition-all duration-300 transform scale-100 animate-in fade-in slide-in-from-bottom-5">
           <TrackPlayer
@@ -328,11 +400,25 @@ export const RecommendationsView = () => {
             title={activeTrack.title}
             artist={activeTrack.artist}
             durationMs={activeTrack.duration_ms}
-            isPlaying={sdkIsPlaying} // 👈 Conectado directamente al SDK global
-            onPlayToggle={() => {}} // 👈 Pasa a ser una función vacía porque el listener de player_state_changed en tu Context actualizará reactivamente a sdkIsPlaying
+            isPlaying={sdkIsPlaying}
+            onPlayToggle={async () => {
+              if (sdkIsPlaying) {
+                await pauseTrack();
+              } else if (player) {
+                await player.resume();
+              }
+            }}
           />
         </div>
       )}
+
+      {/* ⚡ MODIFICADO: Inyectamos el Modal pasándole estrictamente el array 'selectedTracks' de 10 elementos */}
+      <ExportPlaylistModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        defaultName={`${currentMood ? currentMood.charAt(0).toUpperCase() + currentMood.slice(1) : "My"} Mood Mix`}
+        tracksToExport={selectedTracks}
+      />
     </div>
   );
 };
