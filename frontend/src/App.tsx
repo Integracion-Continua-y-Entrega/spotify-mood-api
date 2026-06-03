@@ -16,6 +16,7 @@ import {
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { UserProvider } from "./context/UserContext";
 import { MusicProvider } from "./context/MusicContext";
+import { PlaybackProvider } from "./context/PlaybackContext"; // 👈 Importación se queda aquí
 
 const ProtectedRoute = () => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -28,7 +29,14 @@ const ProtectedRoute = () => {
     );
   }
 
-  return isAuthenticated ? <Outlet /> : <Navigate to="/" replace />;
+  // ⚡ CAMBIO AQUÍ: Si está autenticado, inyectamos el PlaybackProvider rodeando al Outlet
+  return isAuthenticated ? (
+    <PlaybackProvider>
+      <Outlet />
+    </PlaybackProvider>
+  ) : (
+    <Navigate to="/" replace />
+  );
 };
 
 function AppRoutes() {
@@ -56,6 +64,7 @@ function App() {
       <UserProvider>
         <MusicProvider>
           <Router>
+            {/* ⚡ CAMBIO AQUÍ: Eliminamos PlaybackProvider de este nivel global */}
             <AppRoutes />
           </Router>
         </MusicProvider>

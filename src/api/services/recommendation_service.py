@@ -16,9 +16,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from motor.motor_asyncio import AsyncIOMotorCollection
 
-
 logger = logging.getLogger(__name__)
-
 
 class RecommendationService:
     def __init__(self, collection: AsyncIOMotorCollection):
@@ -76,7 +74,7 @@ class RecommendationService:
     ) -> RecommendationCollection:
         """
         Genera una recomendación personalizada basada en el mood del usuario
-        y su perfil acústico, y la persiste en la base de datos-
+        y su perfil acústico, y la persiste en la base de datos.
 
         Args:
             mood: Representa el estado de ánimo del usuario al generar las recomendaciones.
@@ -170,6 +168,7 @@ class RecommendationService:
             raise InternalError("Error interno al generar recomendaciones")
 
     async def create(self, recommendation: Recommendation) -> str:
+        # El modelo de guardado en la base de datos se mantiene puro y ligero
         doc = recommendation.model_dump(by_alias=True, exclude={"id"})
         result = await self.recommendations.insert_one(doc)
         return str(result.inserted_id)

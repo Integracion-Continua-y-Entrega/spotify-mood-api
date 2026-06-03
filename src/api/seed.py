@@ -62,7 +62,7 @@ def load_tracks():
                         main_artist = parsed_list[0]
                     else:
                         main_artist = artists_list
-                except (ValueError, SyntaxError):  # Fix SyntaxWarning: captura explícita
+                except (ValueError, SyntaxError):
                     main_artist = artists_list
             elif isinstance(artists_list, list) and len(artists_list) > 0:
                 main_artist = artists_list[0]
@@ -72,6 +72,7 @@ def load_tracks():
                 artist=main_artist,
                 album=row['album'],
                 duration_ms=row['duration_ms'],
+                preview_url=None,
                 external_ids=ExternalIds(spotify_id=row['id']),
                 acoustic_features=AcousticFeatures(
                     energy=row['energy'],

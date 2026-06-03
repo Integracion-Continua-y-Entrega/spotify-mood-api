@@ -1,7 +1,9 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMusic } from "../../context/MusicContext";
+import { usePlayback } from "../../context/PlaybackContext";
 import { Track } from "../../types/track";
+import { TrackPlayer } from "../../components/TrackPlayer/TrackPlayer";
 import {
   Radar,
   RadarChart,
@@ -15,14 +17,26 @@ import {
   ThumbsDown,
   SkipForward,
   Play,
+  Pause,
   Clock,
   ChevronLeft,
 } from "lucide-react";
 
 export const RecommendationsView = () => {
   const [feedback, setFeedback] = useState<Record<string, string>>({});
+  const [activeTrackId, setActiveTrackId] = useState<string | null>(null); // Guardamos el ID de la canción activa
+
   const navigate = useNavigate();
   const { recommendations, currentMood, isLoading, error } = useMusic();
+  
+  // ⚡ MEJORA: Consumimos el estado de reproducción real del SDK y sus métodos de control
+  const { 
+    isReady, 
+    isPlaying: sdkIsPlaying, // Renombrado localmente para claridad
+    playTrack, 
+    pauseTrack, 
+    player 
+  } = usePlayback(); 
 
   const formatTime = (ms: number) => {
     const minutes = Math.floor(ms / 60000);
@@ -30,12 +44,32 @@ export const RecommendationsView = () => {
     return `${minutes}:${Number(seconds) < 10 ? "0" : ""}${seconds}`;
   };
 
-  const radarData = useMemo(() => {
-    if (!recommendations || recommendations.length === 0) return [];
+  // Encontrar los metadatos completos del track activo para el Player flotante
+  const activeTrack = useMemo(() => {
+    return recommendations?.find((t) => t._id === activeTrackId);
+  }, [recommendations, activeTrackId]);
 
-    const avg = (key: keyof Track["acoustic_features"]) =>
-      recommendations.reduce((acc, t) => acc + t.acoustic_features[key], 0) /
-      recommendations.length;
+  /**
+   * 📊 PROCESAMIENTO SEGURO DEL RADAR (TypeScript Safe)
+   */
+  const radarData = useMemo(() => {
+    const localTracks = recommendations;
+
+    if (!localTracks || localTracks.length === 0) return [];
+
+    const validTracks = localTracks.filter(
+      (t): t is Track => !!t && !!t.acoustic_features
+    );
+
+    if (validTracks.length === 0) return [];
+
+    const avg = (key: keyof Track["acoustic_features"]) => {
+      const sum = validTracks.reduce((acc, t) => {
+        const val = t.acoustic_features?.[key];
+        return acc + (typeof val === "number" ? val : 0);
+      }, 0);
+      return sum / validTracks.length;
+    };
 
     return [
       { subject: "Energía", A: avg("energy") },
@@ -45,6 +79,36 @@ export const RecommendationsView = () => {
       { subject: "Instrumental", A: avg("instrumentalness") },
     ];
   }, [recommendations]);
+
+  // ⚡ MEJORA CRÍTICA: Ahora el manejador es asíncrono y dispara comandos reales al SDK de Spotify
+  const handleTrackPlayToggle = async (track: Track) => {
+    if (!isReady) return;
+    
+    const trackUri = `spotify:track:${track.external_ids?.spotify_id}`;
+    if (!track.external_ids?.spotify_id) return;
+
+    try {
+      if (activeTrackId === track._id) {
+        // Si presionamos la misma canción que está activa, alternamos su estado nativo
+        if (sdkIsPlaying) {
+          await pauseTrack();
+        } else {
+          // Si el reproductor ya tiene la canción cargada y en pausa, usamos .resume() nativo
+          if (player) {
+            await player.resume();
+          } else {
+            await playTrack(trackUri);
+          }
+        }
+      } else {
+        // Si es una canción nueva, actualizamos el ID activo y enviamos el URI a la API de Spotify
+        setActiveTrackId(track._id);
+        await playTrack(trackUri);
+      }
+    } catch (err) {
+      console.error("Error al controlar la reproducción desde la lista:", err);
+    }
+  };
 
   const handleFeedback = (
     trackId: string,
@@ -101,7 +165,7 @@ export const RecommendationsView = () => {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white p-4 md:p-8">
+    <div className="min-h-screen bg-zinc-950 text-white p-4 md:p-8 pb-28">
       <button
         onClick={() => navigate("/dashboard")}
         className="flex items-center gap-2 text-zinc-400 hover:text-white mb-8 group"
@@ -122,12 +186,7 @@ export const RecommendationsView = () => {
 
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart
-                  cx="50%"
-                  cy="50%"
-                  outerRadius="80%"
-                  data={radarData}
-                >
+                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
                   <PolarGrid stroke="#3f3f46" />
                   <PolarAngleAxis
                     dataKey="subject"
@@ -167,60 +226,113 @@ export const RecommendationsView = () => {
             </div>
 
             <div className="divide-y divide-zinc-800">
-              {recommendations?.map((track: Track, index: number) => (
-                <div
-                  key={track._id}
-                  className="p-4 flex items-center gap-4 hover:bg-white/5 transition-colors group"
-                >
-                  <span className="text-zinc-600 font-mono w-4">
-                    {index + 1}
-                  </span>
+              {recommendations?.map((track: Track, index: number) => {
+                const isCurrentTrack = activeTrackId === track._id;
+                // ⚡ MEJORA: Vinculado al estado real del SDK de Spotify
+                const isCurrentPlaying = isCurrentTrack && sdkIsPlaying; 
+                
+                const hasValidSpotifyId = !!track.external_ids?.spotify_id;
 
-                  <div className="relative w-12 h-12 bg-zinc-800 rounded flex items-center justify-center overflow-hidden">
-                    <Play className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity absolute z-10" />
-                    <Music className="w-6 h-6 text-zinc-600 group-hover:opacity-20" />
-                  </div>
+                return (
+                  <div
+                    key={track._id}
+                    className="p-4 flex items-center gap-4 hover:bg-white/5 transition-colors group"
+                  >
+                    <span className="text-zinc-600 font-mono w-4">
+                      {index + 1}
+                    </span>
 
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-semibold truncate">{track.title}</h4>
-                    <p className="text-zinc-500 text-sm truncate">
-                      {track.artist} • {track.album}
-                    </p>
-                  </div>
-
-                  <div className="hidden md:flex items-center gap-2 text-zinc-500 text-sm mr-4">
-                    <Clock className="w-3 h-3" />
-                    {formatTime(track.duration_ms)}
-                  </div>
-
-                  <div className="flex items-center gap-1">
+                    {/* Botón interactivo de reproducción en la fila */}
                     <button
-                      onClick={() => handleFeedback(track._id, "like")}
-                      className={`p-2 rounded-full transition-colors ${feedback[track._id] === "like" ? "text-green-500 bg-green-500/10" : "hover:bg-zinc-800 text-zinc-500"}`}
+                      onClick={() => handleTrackPlayToggle(track)} // 👈 Pasamos el objeto Track completo
+                      disabled={!hasValidSpotifyId || !isReady}
+                      className={`relative w-12 h-12 bg-zinc-800 rounded flex items-center justify-center overflow-hidden group/btn border border-transparent transition-colors ${(hasValidSpotifyId && isReady) ? "cursor-pointer hover:border-green-500/50" : "cursor-not-allowed opacity-40"}`}
+                      title={
+                        !hasValidSpotifyId 
+                          ? "ID de catálogo no disponible" 
+                          : !isReady 
+                          ? "Conectando dispositivo de audio..." 
+                          : "Reproducir en Spotify Premium"
+                      }
                     >
-                      <Heart
-                        className={`w-5 h-5 ${feedback[track._id] === "like" ? "fill-current" : ""}`}
+                      {isCurrentPlaying ? (
+                        <>
+                          <div className="flex gap-0.5 items-end h-4 z-10 group-hover/btn:opacity-0 transition-opacity">
+                            <div className="w-0.5 h-full bg-green-500 animate-[bounce_0.8s_infinite_0.1s]"></div>
+                            <div className="w-0.5 h-3 bg-green-500 animate-[bounce_0.8s_infinite_0.3s]"></div>
+                            <div className="w-0.5 h-4 bg-green-500 animate-[bounce_0.8s_infinite_0.2s]"></div>
+                          </div>
+                          <Pause className="w-5 h-5 text-white opacity-0 group-hover/btn:opacity-100 transition-opacity absolute z-10 fill-current" />
+                        </>
+                      ) : (
+                        <Play
+                          className={`w-5 h-5 transition-opacity absolute z-10 fill-current ${isCurrentTrack ? "opacity-100 text-green-500" : "text-white opacity-0 group-hover/btn:opacity-100"}`}
+                        />
+                      )}
+                      <Music
+                        className={`w-6 h-6 text-zinc-600 transition-opacity ${isCurrentPlaying ? "opacity-0" : "group-hover/btn:opacity-20"}`}
                       />
                     </button>
-                    <button
-                      onClick={() => handleFeedback(track._id, "dislike")}
-                      className={`p-2 rounded-full transition-colors ${feedback[track._id] === "dislike" ? "text-red-500 bg-red-500/10" : "hover:bg-zinc-800 text-zinc-500"}`}
-                    >
-                      <ThumbsDown className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => handleFeedback(track._id, "skip")}
-                      className="p-2 rounded-full hover:bg-zinc-800 text-zinc-500 transition-colors"
-                    >
-                      <SkipForward className="w-5 h-5" />
-                    </button>
+
+                    <div className="flex-1 min-w-0">
+                      <h4
+                        className={`font-semibold truncate transition-colors ${isCurrentTrack ? "text-green-500" : "text-white"}`}
+                      >
+                        {track.title}
+                      </h4>
+                      <p className="text-zinc-500 text-sm truncate">
+                        {track.artist} • {track.album}
+                      </p>
+                    </div>
+
+                    <div className="hidden md:flex items-center gap-2 text-zinc-500 text-sm mr-4">
+                      <Clock className="w-3 h-3" />
+                      {formatTime(track.duration_ms)}
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleFeedback(track._id, "like")}
+                        className={`p-2 rounded-full transition-colors ${feedback[track._id] === "like" ? "text-green-500 bg-green-500/10" : "hover:bg-zinc-800 text-zinc-500"}`}
+                      >
+                        <Heart
+                          className={`w-5 h-5 ${feedback[track._id] === "like" ? "fill-current" : ""}`}
+                        />
+                      </button>
+                      <button
+                        onClick={() => handleFeedback(track._id, "dislike")}
+                        className={`p-2 rounded-full transition-colors ${feedback[track._id] === "dislike" ? "text-red-500 bg-red-500/10" : "hover:bg-zinc-800 text-zinc-500"}`}
+                      >
+                        <ThumbsDown className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => handleFeedback(track._id, "skip")}
+                        className="p-2 rounded-full hover:bg-zinc-800 text-zinc-500 transition-colors"
+                      >
+                        <SkipForward className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
       </div>
+
+      {/* ⚡ REPRODUCTOR FLOTANTE MAESTRO ENLAZADO AL SDK */}
+      {activeTrack && (
+        <div className="fixed bottom-6 right-6 z-50 shadow-2xl transition-all duration-300 transform scale-100 animate-in fade-in slide-in-from-bottom-5">
+          <TrackPlayer
+            trackUri={`spotify:track:${activeTrack.external_ids?.spotify_id}`}
+            title={activeTrack.title}
+            artist={activeTrack.artist}
+            durationMs={activeTrack.duration_ms}
+            isPlaying={sdkIsPlaying} // 👈 Conectado directamente al SDK global
+            onPlayToggle={() => {}} // 👈 Pasa a ser una función vacía porque el listener de player_state_changed en tu Context actualizará reactivamente a sdkIsPlaying
+          />
+        </div>
+      )}
     </div>
   );
 };
