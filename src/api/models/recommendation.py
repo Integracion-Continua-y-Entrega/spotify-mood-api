@@ -4,6 +4,8 @@ from datetime import datetime
 
 PyObjectId = Annotated[str, BeforeValidator(str)]
 
+USER_FEEDBACK = Literal["like", "dislike", "skip"]
+
 class AcousticRangeFilter(BaseModel):
     """Rango min/max para un parámetro acústico."""
     min: float = Field(ge=0.0, le=1.0)
@@ -24,7 +26,7 @@ class RecommendedTrack(BaseModel):
     track_id:      PyObjectId
     score:         float = Field(ge=0.0, le=1.0)
     rank:          int   = Field(ge=1)
-    user_feedback: Optional[Literal["like", "dislike", "skip"]] = None
+    user_feedback: Optional[USER_FEEDBACK] = None
     feedback_at:   Optional[datetime] = None
 
 class SessionContext(BaseModel):

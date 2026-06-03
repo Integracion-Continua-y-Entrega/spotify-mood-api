@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta, timezone
+import logging
 import os
 import logging
+import time
 from dotenv import load_dotenv
 from fastapi import HTTPException
 import httpx
@@ -30,6 +32,8 @@ SPOTIFY_REDIRECT_URI  = _require_env("SPOTIFY_REDIRECT_URI")
 ENCRYPTION_KEY        = _require_env("TOKEN_ENCRYPTION_KEY")
 
 fernet = Fernet(ENCRYPTION_KEY)
+
+logger = logging.getLogger(__name__)
 
 class AuthService():
     
@@ -70,7 +74,7 @@ class AuthService():
 
         # Setup del usuario
         await user_service.upsert_user(spotify_user, encrypted_refresh)
-        await user_service.update_user_preferences(spotify_user["id"], spotify_user_top_tracks, track_service)
+        await user_service.update_user_preferences(spotify_user["id"], spotify_user_top_tracks, track_service) 
 
         return {
             "access_token": session_token,
