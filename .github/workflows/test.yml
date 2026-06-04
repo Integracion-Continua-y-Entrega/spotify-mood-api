@@ -10,7 +10,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    # Levantamos MongoDB como un servicio dentro de GitHub Actions
     services:
       mongodb:
         image: mongo:latest
@@ -33,15 +32,29 @@ jobs:
 
     - name: Ejecutar Pruebas
       env:
-        # Variables requeridas por la función _require_env en main.py[cite: 1]
         JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
         SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
         SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
         SPOTIFY_REDIRECT_URI: "http://localhost:5173/callback"
         TOKEN_ENCRYPTION_KEY: ${{ secrets.TOKEN_ENCRYPTION_KEY }}
-        # URI para conectar al servicio de mongo arriba definido
         MONGO_URI: "mongodb://localhost:27017"
         MONGO_DB: "test_db"
       run: |
         export PYTHONPATH=$PYTHONPATH:$(pwd)/src/api
         pytest tests/
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Desplegar backend en Render
+      run: curl -fsS -X POST "$RENDER_BACKEND_DEPLOY_HOOK_URL"
+      env:
+        RENDER_BACKEND_DEPLOY_HOOK_URL: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK_URL }}
+
+    - name: Desplegar frontend en Render
+      run: curl -fsS -X POST "$RENDER_FRONTEND_DEPLOY_HOOK_URL"
+      env:
+        RENDER_FRONTEND_DEPLOY_HOOK_URL: ${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK_URL }}
