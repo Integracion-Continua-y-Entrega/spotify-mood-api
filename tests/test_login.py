@@ -35,7 +35,8 @@ async def test_spotify_login_persistence():
          patch("services.auth_service.encrypt_refresh_token") as mock_encrypt, \
          patch("services.track_service.TrackService.find_by_spotify_id", new_callable=AsyncMock) as mock_find_track, \
          patch("services.user_service.UserService.upsert_user", new_callable=AsyncMock) as mock_upsert, \
-         patch("services.user_service.UserService.update_user_preferences", new_callable=AsyncMock) as mock_update_prefs:
+         patch("services.user_service.UserService.update_user_preferences", new_callable=AsyncMock) as mock_update_prefs, \
+         patch("services.user_service.UserService.update_spotify_access_token", new_callable=AsyncMock) as mock_update_token:
         
         # Configuramos los retornos de los mocks
         mock_exchange.return_value = mock_tokens
@@ -47,6 +48,7 @@ async def test_spotify_login_persistence():
         # Simulamos que el usuario se guarda/actualiza correctamente en el servicio
         mock_upsert.return_value = "mock_user_id_123"
         mock_update_prefs.return_value = True
+        mock_update_token.return_value = True
 
         async with app.router.lifespan_context(app):
             transport = ASGITransport(app=app)
@@ -56,9 +58,9 @@ async def test_spotify_login_persistence():
             # --- VALIDACIÓN ---
             assert response.status_code == 200
             
-            # QA: En lugar de consultar MongoDB (que daría error), verificamos 
-            # que se llamó al método de persistencia con los datos correctos.
+            # QA: Verificamos que se llamaron a todos los flujos de persistencia esperados
             assert mock_upsert.called
+            assert mock_update_token.called
             data = response.json()
             assert "access_token" in data
 

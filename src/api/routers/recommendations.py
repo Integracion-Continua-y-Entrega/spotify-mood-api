@@ -4,10 +4,15 @@ from exceptions.exceptions import InvalidIdError, NotFoundError, InternalError
 from models.recommendation import Recommendation, USER_FEEDBACK
 from models.mood import Mood
 from models.recommendations_collection import RecommendationCollection
+from dependencies import (
+    get_current_user, 
+    get_recommendation_service, 
+    get_track_service, 
+    get_user_service
+)
 from services.recommendation_service import RecommendationService
 from services.track_service import TrackService
 from services.user_service import UserService
-from dependencies import get_current_user, get_recommendation_service, get_track_service, get_user_service
 
 router = APIRouter()
 

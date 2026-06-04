@@ -10,9 +10,13 @@ const DEFAULT_SCOPES = [
   "user-read-private",
   "user-read-email",
   "user-top-read",
+  "streaming", // ⚡ IMPRESCINDIBLE: Permite al SDK abrir WebSockets y simular un reproductor
+  "user-modify-playback-state", // ⚡ IMPRESCINDIBLE: Permite a tu función playTrack (fetch PUT) cambiar la música
+  "user-read-playback-state", // ⚡ RECOMENDADO: Permite capturar eventos cuando la música cambie o se pause
   "playlist-modify-private",
   "playlist-modify-public",
 ];
+
 const PKCE_VERIFIER_KEY = "spotify_pkce_verifier";
 const PKCE_STATE_KEY = "spotify_pkce_state";
 

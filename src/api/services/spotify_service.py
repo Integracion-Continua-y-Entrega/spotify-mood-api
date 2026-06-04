@@ -1,14 +1,13 @@
 import base64
-import httpx
-
+import logging
 from fastapi import HTTPException
+import httpx
 from cryptography.fernet import Fernet
 
 SPOTIFY_ME_URL = "https://api.spotify.com/v1/me"
 
-import logging
-
 logger = logging.getLogger(__name__)
+
 
 def _spotify_basic_header(client_id: str, client_secret: str) -> str:
     """Genera el header Basic Auth para Spotify (Confidential Client)."""
@@ -40,10 +39,14 @@ async def exchange_code_for_tokens(
             },
         )
     except httpx.RequestError as e:
-        raise HTTPException(status_code=500, detail="Error de conexión con Spotify")
+        raise HTTPException(
+            status_code=500, detail="Error de conexión con Spotify"
+        )
 
     if res.status_code != 200:
-        raise HTTPException(status_code=400, detail=f"Spotify Auth Error: {res.text}")
+        raise HTTPException(
+            status_code=400, detail=f"Spotify Auth Error: {res.text}"
+        )
 
     return res.json()
 
@@ -76,45 +79,75 @@ async def fetch_spotify_profile(
         if isinstance(res_json, dict):
             message = res_json.get("error", {}).get("message")
 
-        logger.warning(f"Spotify Profile Error | status={status} | message={message or e.response.text}")
+        logger.warning(
+            f"Spotify Profile Error | status={status} | message={message or e.response.text}"
+        )
 
         if status == 401:
-            raise HTTPException(status_code=401, detail=message or "Token inválido o expirado")
+            raise HTTPException(
+                status_code=401, detail=message or "Token inválido o expirado"
+            )
         elif status == 429:
-            raise HTTPException(status_code=429, detail=message or "Rate limit excedido")
+            raise HTTPException(
+                status_code=429, detail=message or "Rate limit excedido"
+            )
         elif 500 <= status < 600:
-            raise HTTPException(status_code=502, detail=message or "Error en Spotify")
+            raise HTTPException(
+                status_code=502, detail=message or "Error en Spotify"
+            )
         else:
             raise HTTPException(
                 status_code=400,
-                detail=message or f"Error inesperado ({status})"
+                detail=message or f"Error inesperado ({status})",
             )
 
-    logger.info(f"Spotify profile fetched successfully | status={res.status_code}")
+    logger.info(
+        f"Spotify profile fetched successfully | status={res.status_code}"
+    )
     return res.json()
 
-async def fetch_user_top_tracks(client: httpx.AsyncClient, access_token: str) -> list[dict]:
+
+async def fetch_user_top_tracks(
+    client: httpx.AsyncClient, access_token: str
+) -> list[dict]:
+    """Obtiene y deduplica los tracks más escuchados del usuario en diferentes plazos."""
+    
     time_ranges = ["short_term", "medium_term", "long_term"]
     seen_ids = set()
     all_tracks = []
 
     for time_range in time_ranges:
-        url = f"https://api.spotify.com/v1/me/top/tracks?limit=50&time_range={time_range}"
+        url = (
+            "https://api.spotify.com/v1/me/top/tracks"
+            f"?limit=50&time_range={time_range}"
+        )
+
         logger.info(f"Fetching top tracks [{time_range}]...")
 
         try:
-            res = await client.get(url, headers={"Authorization": f"Bearer {access_token}"})
+            res = await client.get(
+                url,
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
         except httpx.RequestError as e:
             logger.error(f"Connection error with Spotify: {e}")
-            raise HTTPException(status_code=500, detail="Error de conexión con Spotify")
+            raise HTTPException(
+                status_code=500,
+                detail="Error de conexión con Spotify",
+            )
 
         if res.status_code != 200:
-            logger.warning(f"Spotify Error | status={res.status_code} | body={res.text}")
-            raise HTTPException(status_code=400, detail=f"Spotify Error: {res.text}")
+            logger.warning(
+                f"Spotify Error | status={res.status_code} | body={res.text}"
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=f"Spotify Error: {res.text}",
+            )
 
         tracks = res.json().get("items", [])
 
-        # Deduplicar por spotify id
+        # Deduplicar por Spotify ID
         for track in tracks:
             if track["id"] not in seen_ids:
                 seen_ids.add(track["id"])
@@ -129,5 +162,6 @@ def encrypt_refresh_token(fernet: Fernet, refresh_token: str) -> str:
     try:
         return fernet.encrypt(refresh_token.encode()).decode()
     except Exception:
-        raise HTTPException(status_code=500, detail="Error interno de cifrado")
-
+        raise HTTPException(
+            status_code=500, detail="Error interno de cifrado"
+        )
