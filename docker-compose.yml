@@ -1,37 +1,32 @@
 services:
-  # Backend (FastAPI)
   backend:
-    build:
-      context: ./src/api
-      dockerfile: Dockerfile
+    image: zs23017378/spotify-mood-api-backend:latest 
     container_name: spotify_backend
     ports:
       - "8000:8000"
     env_file:
-      - ./src/api/.env   
+      - ./src/api/.env
+    # volumes:
+    #   - ./src/api:/app
+    restart: unless-stopped
 
-  # Frontend (React/Vite)
   frontend:
-    build:
-      context: ./frontend
+    image: zs23017378/spotify-mood-api-frontend:latest 
     container_name: spotify_frontend
     ports:
-      - "5173:5173"
+      - "5173:5173"   
     env_file:
       - ./frontend/.env
     depends_on:
       - backend
+    restart: unless-stopped
 
   # seeder:
   #   build:
   #     context: ./src/api
-  #   command:
-  #     python ./app/src/api/seed.py
-  #   # depends_on:
-  #   #   - mongodb
+  #   command: python ./app/src/api/seed.py
+  #   depends_on:
+  #     - backend
   #   volumes:
   #     - ./src/api:/code/app/src/api
   #   restart: "no"
-
-volumes:
-  mongo-data:
